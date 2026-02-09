@@ -1,53 +1,49 @@
-import { defineCommand, runMain } from "citty";
+import { defineCommand, runMain, runCommand } from "citty";
 import { fetchCommand } from "./commands/fetch";
 import { addCommand } from "./commands/add";
 import { updateCommand } from "./commands/update";
 import { listCommand } from "./commands/list";
 
-const main = defineCommand({
-  meta: {
-    name: "docs2ai",
-    version: "0.1.0",
-    description: "Convert documentation URLs into AI-ready Markdown files",
-  },
-  args: {
-    url: {
-      type: "positional",
-      description: "Documentation URL to convert",
-      required: false,
+const subCommands: Record<string, any> = {
+  add: addCommand,
+  update: updateCommand,
+  list: listCommand,
+};
+
+// Check if first non-flag arg is a subcommand
+const firstArg = process.argv[2];
+const isSubCommand = firstArg && firstArg in subCommands;
+
+if (isSubCommand) {
+  // Let citty handle subcommand routing
+  const main = defineCommand({
+    meta: {
+      name: "docs2ai",
+      version: "0.1.0",
+      description: "Convert documentation URLs into AI-ready Markdown files",
     },
-    output: {
-      type: "string",
-      alias: "o",
-      description: "Output file path",
+    subCommands,
+  });
+  runMain(main);
+} else if (firstArg && !firstArg.startsWith("-") && firstArg !== "--help") {
+  // Treat as a URL — run fetch command directly
+  runCommand(fetchCommand, { rawArgs: process.argv.slice(2) });
+} else {
+  // No args or --help — show usage
+  const main = defineCommand({
+    meta: {
+      name: "docs2ai",
+      version: "0.1.0",
+      description: "Convert documentation URLs into AI-ready Markdown files",
     },
-    crawl: {
-      type: "boolean",
-      description: "Follow sidebar/nav links",
-      default: false,
-    },
-    "max-depth": {
-      type: "string",
-      description: "Maximum crawl depth",
-      default: "2",
-    },
-  },
-  subCommands: {
-    add: addCommand,
-    update: updateCommand,
-    list: listCommand,
-  },
-  run({ args }) {
-    if (!args.url) {
+    subCommands,
+    run() {
       console.log("Usage: docs2ai <url> [-o output.md] [--crawl]");
       console.log("       docs2ai add <url> [--name name] [--crawl]");
       console.log("       docs2ai update [--name name]");
       console.log("       docs2ai list");
       console.log("\nRun `docs2ai --help` for full usage.");
-      return;
-    }
-    return (fetchCommand as any).run({ args });
-  },
-});
-
-runMain(main);
+    },
+  });
+  runMain(main);
+}
