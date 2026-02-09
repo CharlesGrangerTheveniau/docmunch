@@ -32,6 +32,9 @@ export function createMcpServer(docsDir: string): McpServer {
                 platform: s.platform,
                 fetchedAt: s.fetchedAt,
                 pageCount: s.pageCount,
+                ...(s.displayName && { displayName: s.displayName }),
+                ...(s.description && { description: s.description }),
+                ...(s.iconUrl !== undefined && { iconUrl: s.iconUrl }),
               })),
               null,
               2

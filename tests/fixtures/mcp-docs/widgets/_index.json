@@ -5,5 +5,11 @@
   "fetched_at": "2025-06-02T12:00:00Z",
   "pages": [
     { "title": "Widgets Overview", "path": "overview.md" }
-  ]
+  ],
+  "display_name": "Widgets",
+  "description": "Widget library documentation",
+  "icon_url": "https://widgets.io/icon.png",
+  "og_image": null,
+  "language": "en",
+  "page_count": 1
 }

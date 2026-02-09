@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
+import type { SiteMeta } from "./meta-extractor";
 
 /** Manifest for a single documentation source (written as _index.json). */
 export interface SourceManifest {
@@ -8,29 +9,59 @@ export interface SourceManifest {
   platform: string;
   fetched_at: string;
   pages: { title: string; path: string }[];
+  display_name?: string;
+  description?: string;
+  icon_url?: string | null;
+  og_image?: string | null;
+  language?: string | null;
+  page_count?: number;
+}
+
+/** Entry in the root manifest's sources array. */
+export interface RootManifestEntry {
+  name: string;
+  path: string;
+  fetched_at: string;
+  display_name?: string;
+  description?: string;
+  icon_url?: string | null;
+  page_count?: number;
 }
 
 /** Root manifest listing all sources (written as manifest.json). */
 export interface RootManifest {
-  sources: { name: string; path: string; fetched_at: string }[];
+  sources: RootManifestEntry[];
 }
 
 /**
  * Build a source manifest object.
+ * When siteMeta is provided, its fields are included in the manifest.
  */
 export function buildSourceManifest(
   name: string,
   url: string,
   platform: string,
-  pages: { title: string; path: string }[]
+  pages: { title: string; path: string }[],
+  siteMeta?: SiteMeta
 ): SourceManifest {
-  return {
+  const manifest: SourceManifest = {
     name,
     url,
     platform,
     fetched_at: new Date().toISOString(),
     pages,
   };
+
+  if (siteMeta) {
+    manifest.display_name = siteMeta.displayName;
+    manifest.description = siteMeta.description;
+    manifest.icon_url = siteMeta.iconUrl;
+    manifest.og_image = siteMeta.ogImage;
+    manifest.language = siteMeta.language;
+    manifest.page_count = pages.length;
+  }
+
+  return manifest;
 }
 
 /**
@@ -66,7 +97,7 @@ export function loadRootManifest(rootDir: string): RootManifest {
  */
 export function updateRootManifest(
   rootDir: string,
-  entry: { name: string; path: string; fetched_at: string }
+  entry: RootManifestEntry
 ): void {
   const manifest = loadRootManifest(rootDir);
   const idx = manifest.sources.findIndex((s) => s.name === entry.name);

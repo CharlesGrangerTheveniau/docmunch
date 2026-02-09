@@ -38,9 +38,14 @@ export function extract(html: string, url: string): ExtractResult {
   }
 
   // Generic / fallback: Readability extraction
-  const { document } = parseHTML(html);
-  const reader = new Readability(document as any);
-  const article = reader.parse();
+  let article: ReturnType<Readability["parse"]> = null;
+  try {
+    const { document } = parseHTML(html);
+    const reader = new Readability(document as any);
+    article = reader.parse();
+  } catch {
+    // Readability can throw on empty/malformed HTML — fall through to body/raw
+  }
 
   const content = article?.content || $("body").html() || html;
 

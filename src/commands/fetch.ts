@@ -15,6 +15,7 @@ import {
   writeSourceManifest,
   updateRootManifest,
 } from "../pipeline/manifest";
+import { extractSiteMeta } from "../pipeline/meta-extractor";
 
 /**
  * Determine whether crawl output should go to a directory (one file per page)
@@ -118,7 +119,8 @@ export const fetchCommand = defineCommand({
         const firstPlatform = pageEntries[0]?.platform || "generic";
         const manifestPages = writePages(pageEntries, outputDir, effectivePrefix);
 
-        const sourceManifest = buildSourceManifest(name, url, firstPlatform, manifestPages);
+        const siteMeta = extractSiteMeta(firstHtml, url);
+        const sourceManifest = buildSourceManifest(name, url, firstPlatform, manifestPages, siteMeta);
         writeSourceManifest(sourceManifest, outputDir);
 
         // Update root manifest in the parent directory
@@ -127,6 +129,10 @@ export const fetchCommand = defineCommand({
           name,
           path: name + "/",
           fetched_at: sourceManifest.fetched_at,
+          display_name: siteMeta.displayName,
+          description: siteMeta.description,
+          icon_url: siteMeta.iconUrl,
+          page_count: manifestPages.length,
         });
 
         consola.success(`Written ${pages.length} pages to ${outputDir}`);

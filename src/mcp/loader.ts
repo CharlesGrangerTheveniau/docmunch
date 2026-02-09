@@ -20,6 +20,9 @@ export interface LoadedSource {
   platform: string;
   fetchedAt: string;
   pageCount: number;
+  displayName?: string;
+  description?: string;
+  iconUrl?: string | null;
 }
 
 /** All loaded documentation data. */
@@ -38,6 +41,9 @@ interface SourceManifest {
   platform: string;
   fetched_at: string;
   pages: { title: string; path: string }[];
+  display_name?: string;
+  description?: string;
+  icon_url?: string | null;
 }
 
 /**
@@ -88,13 +94,17 @@ export function loadDocs(docsDir: string): LoadedDocs {
       }
     }
 
-    sources.push({
+    const loadedSource: LoadedSource = {
       name: sourceManifest.name,
       url: sourceManifest.url,
       platform: sourceManifest.platform,
       fetchedAt: sourceManifest.fetched_at,
       pageCount,
-    });
+    };
+    if (sourceManifest.display_name) loadedSource.displayName = sourceManifest.display_name;
+    if (sourceManifest.description) loadedSource.description = sourceManifest.description;
+    if (sourceManifest.icon_url !== undefined) loadedSource.iconUrl = sourceManifest.icon_url;
+    sources.push(loadedSource);
   }
 
   return { sources, pages };

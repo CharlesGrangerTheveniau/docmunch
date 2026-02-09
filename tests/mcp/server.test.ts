@@ -38,9 +38,15 @@ describe("MCP server", () => {
       expect(acme.url).toBe("https://docs.acme.com/getting-started");
       expect(acme.platform).toBe("mintlify");
       expect(acme.pageCount).toBe(2);
+      expect(acme.displayName).toBe("Acme Docs");
+      expect(acme.description).toBe("Official Acme documentation");
+      expect(acme.iconUrl).toBe("https://docs.acme.com/favicon.ico");
 
       const widgets = sources.find((s: any) => s.name === "widgets");
       expect(widgets.pageCount).toBe(1);
+      expect(widgets.displayName).toBe("Widgets");
+      expect(widgets.description).toBe("Widget library documentation");
+      expect(widgets.iconUrl).toBe("https://widgets.io/icon.png");
     });
   });
 

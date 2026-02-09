@@ -30,6 +30,35 @@ describe("buildSourceManifest", () => {
     expect(manifest.platform).toBe("mintlify");
     expect(manifest.pages).toEqual(pages);
     expect(manifest.fetched_at).toBeTruthy();
+    // Without siteMeta, optional fields should be absent
+    expect(manifest.display_name).toBeUndefined();
+    expect(manifest.description).toBeUndefined();
+    expect(manifest.icon_url).toBeUndefined();
+  });
+
+  it("includes site meta fields when siteMeta is provided", () => {
+    const pages = [{ title: "Intro", path: "intro.md" }];
+    const siteMeta = {
+      displayName: "Acme Docs",
+      description: "Official docs",
+      iconUrl: "https://example.com/icon.png",
+      ogImage: "https://example.com/og.png",
+      language: "en",
+    };
+    const manifest = buildSourceManifest(
+      "example",
+      "https://example.com/docs",
+      "mintlify",
+      pages,
+      siteMeta
+    );
+
+    expect(manifest.display_name).toBe("Acme Docs");
+    expect(manifest.description).toBe("Official docs");
+    expect(manifest.icon_url).toBe("https://example.com/icon.png");
+    expect(manifest.og_image).toBe("https://example.com/og.png");
+    expect(manifest.language).toBe("en");
+    expect(manifest.page_count).toBe(1);
   });
 });
 

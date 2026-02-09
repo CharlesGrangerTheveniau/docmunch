@@ -16,6 +16,7 @@ import {
   writeSourceManifest,
   updateRootManifest,
 } from "../pipeline/manifest";
+import { extractSiteMeta } from "../pipeline/meta-extractor";
 
 export const updateCommand = defineCommand({
   meta: {
@@ -87,11 +88,13 @@ export const updateCommand = defineCommand({
           const firstPlatform = pageEntries[0]?.platform || "generic";
           const manifestPages = writePages(pageEntries, outputDir, effectivePrefix);
 
+          const siteMeta = extractSiteMeta(firstHtml, source.url);
           const sourceManifest = buildSourceManifest(
             source.name,
             source.url,
             firstPlatform,
-            manifestPages
+            manifestPages,
+            siteMeta
           );
           writeSourceManifest(sourceManifest, outputDir);
 
@@ -100,6 +103,10 @@ export const updateCommand = defineCommand({
             name: source.name,
             path: source.output,
             fetched_at: sourceManifest.fetched_at,
+            display_name: siteMeta.displayName,
+            description: siteMeta.description,
+            icon_url: siteMeta.iconUrl,
+            page_count: manifestPages.length,
           });
 
           consola.success(`Updated "${source.name}" → ${outputDir} (${pages.length} pages)`);

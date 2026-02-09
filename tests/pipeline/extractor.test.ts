@@ -68,4 +68,15 @@ describe("extract", () => {
     const result = extract(html, "https://docs.example.com/getting-started");
     expect(result.title).toBe("Getting Started");
   });
+
+  it("handles empty HTML without throwing", () => {
+    const result = extract("", "https://example.com/empty");
+    expect(result.platform).toBe("generic");
+    expect(result.title).toBe("");
+  });
+
+  it("handles malformed HTML without throwing", () => {
+    const result = extract("<not-valid", "https://example.com/broken");
+    expect(result.platform).toBe("generic");
+  });
 });
