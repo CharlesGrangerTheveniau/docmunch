@@ -1,13 +1,48 @@
 import { defineCommand } from "citty";
+import { dirname } from "node:path";
 import consola from "consola";
 import * as cheerio from "cheerio";
 import { fetchPage, fetchWithBrowser } from "../pipeline/fetcher";
 import { extract } from "../pipeline/extractor";
 import { transform } from "../pipeline/transformer";
-import { write } from "../pipeline/writer";
+import { write, writePages } from "../pipeline/writer";
 import { crawl } from "../crawl/crawler";
 import { resolve } from "../pipeline/resolver";
 import { getStrategy } from "../platforms/registry";
+import { slugFromUrl } from "../utils/url";
+import {
+  buildSourceManifest,
+  writeSourceManifest,
+  updateRootManifest,
+} from "../pipeline/manifest";
+
+/**
+ * Determine whether crawl output should go to a directory (one file per page)
+ * or a single stitched file.
+ */
+function resolveOutputMode(
+  output: string | undefined,
+  shouldCrawl: boolean,
+  name: string
+): { mode: "single-file" | "directory"; outputPath: string | undefined; outputDir: string } {
+  if (!shouldCrawl) {
+    return { mode: "single-file", outputPath: output, outputDir: "" };
+  }
+
+  // Crawl + explicit .md output → single file (backward compat)
+  if (output && output.endsWith(".md")) {
+    return { mode: "single-file", outputPath: output, outputDir: "" };
+  }
+
+  // Crawl + explicit directory path
+  if (output) {
+    const dir = output.endsWith("/") ? output : output + "/";
+    return { mode: "directory", outputPath: undefined, outputDir: dir };
+  }
+
+  // Crawl + no output → default directory
+  return { mode: "directory", outputPath: undefined, outputDir: `.ai/docs/${name}/` };
+}
 
 export const fetchCommand = defineCommand({
   meta: {
@@ -23,7 +58,11 @@ export const fetchCommand = defineCommand({
     output: {
       type: "string",
       alias: "o",
-      description: "Output file path",
+      description: "Output file path or directory",
+    },
+    name: {
+      type: "string",
+      description: "Name for this source (auto-derived from hostname if omitted)",
     },
     crawl: {
       type: "boolean",
@@ -41,7 +80,10 @@ export const fetchCommand = defineCommand({
     const output = args.output as string | undefined;
     const shouldCrawl = args.crawl as boolean;
     const maxDepth = parseInt(args["max-depth"] as string, 10);
-    const silent = !output;
+    const name = (args.name as string) || slugFromUrl(url);
+
+    const { mode, outputPath, outputDir } = resolveOutputMode(output, shouldCrawl, name);
+    const silent = mode === "single-file" && !outputPath;
 
     if (shouldCrawl) {
       if (!silent) consola.start(`Crawling from ${url} (max depth: ${maxDepth})...`);
@@ -53,39 +95,67 @@ export const fetchCommand = defineCommand({
       const strategy = getStrategy(platformId);
       const navLinkSelector = strategy.navLinkSelector();
 
-      const pages = await crawl(url, {
+      const crawlResult = await crawl(url, {
         maxDepth,
         navLinkSelector,
+        discoverUrls: strategy.discoverUrls?.bind(strategy),
         onPageFetched: (pageUrl, current, total) => {
           if (!silent) consola.info(`[${current}/${total}] ${pageUrl}`);
         },
       });
 
+      const { pages, effectivePrefix } = crawlResult;
       if (!silent) consola.success(`Crawled ${pages.length} pages`);
 
-      const sections: string[] = [];
-      let firstTitle = "";
-      let firstPlatform = "";
+      if (mode === "directory") {
+        // Directory mode: one .md file per page + manifests
+        const pageEntries = pages.map((page) => {
+          const { content, title, platform } = extract(page.html, page.url);
+          const md = transform(content);
+          return { url: page.url, title, platform, markdown: md };
+        });
 
-      for (const page of pages) {
-        const { content, title, platform } = extract(page.html, page.url);
-        if (!firstTitle) {
-          firstTitle = title;
-          firstPlatform = platform;
+        const firstPlatform = pageEntries[0]?.platform || "generic";
+        const manifestPages = writePages(pageEntries, outputDir, effectivePrefix);
+
+        const sourceManifest = buildSourceManifest(name, url, firstPlatform, manifestPages);
+        writeSourceManifest(sourceManifest, outputDir);
+
+        // Update root manifest in the parent directory
+        const rootDir = dirname(outputDir.replace(/\/$/, ""));
+        updateRootManifest(rootDir, {
+          name,
+          path: name + "/",
+          fetched_at: sourceManifest.fetched_at,
+        });
+
+        consola.success(`Written ${pages.length} pages to ${outputDir}`);
+      } else {
+        // Single-file mode: stitch all pages together
+        const sections: string[] = [];
+        let firstTitle = "";
+        let firstPlatform = "";
+
+        for (const page of pages) {
+          const { content, title, platform } = extract(page.html, page.url);
+          if (!firstTitle) {
+            firstTitle = title;
+            firstPlatform = platform;
+          }
+          const md = transform(content);
+          sections.push(`## ${title}\n\nSource: ${page.url}\n\n${md}`);
         }
-        const md = transform(content);
-        sections.push(`## ${title}\n\nSource: ${page.url}\n\n${md}`);
+
+        const markdown = sections.join("\n\n---\n\n");
+
+        write(markdown, outputPath, {
+          sourceUrl: url,
+          title: firstTitle,
+          platform: firstPlatform,
+        });
+
+        if (!silent) consola.success(`Written to ${outputPath}`);
       }
-
-      const markdown = sections.join("\n\n---\n\n");
-
-      write(markdown, output, {
-        sourceUrl: url,
-        title: firstTitle,
-        platform: firstPlatform,
-      });
-
-      if (!silent) consola.success(`Written to ${output}`);
     } else {
       if (!silent) consola.start(`Fetching ${url}...`);
       let html = await fetchPage(url);
@@ -99,12 +169,12 @@ export const fetchCommand = defineCommand({
           html = await fetchWithBrowser(url);
           const result = extract(html, url);
           const markdown = transform(result.content);
-          write(markdown, output, {
+          write(markdown, outputPath, {
             sourceUrl: url,
             title: result.title || title,
             platform: result.platform,
           });
-          if (!silent) consola.success(`Written to ${output}`);
+          if (!silent) consola.success(`Written to ${outputPath}`);
           return;
         } catch (err: any) {
           if (err?.code === "ERR_PLAYWRIGHT_NOT_INSTALLED") {
@@ -121,13 +191,13 @@ export const fetchCommand = defineCommand({
       if (!silent) consola.success(`Extracted content (platform: ${platform})`);
       const markdown = transform(content);
 
-      write(markdown, output, {
+      write(markdown, outputPath, {
         sourceUrl: url,
         title,
         platform,
       });
 
-      if (!silent) consola.success(`Written to ${output}`);
+      if (!silent) consola.success(`Written to ${outputPath}`);
     }
   },
 });

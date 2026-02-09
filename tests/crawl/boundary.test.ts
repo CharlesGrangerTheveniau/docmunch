@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   getCrawlPrefix,
+  computeCommonPrefix,
   isInBounds,
   normalizeUrl,
 } from "../../src/crawl/boundary";
@@ -61,6 +62,49 @@ describe("isInBounds", () => {
     expect(
       isInBounds("not-a-url", "https://docs.example.com", "/api/")
     ).toBe(false);
+  });
+});
+
+describe("computeCommonPrefix", () => {
+  it("widens to root when nav links span different top-level paths", () => {
+    const prefix = computeCommonPrefix(
+      "https://docs.example.com/triggers/triggers-101",
+      [
+        "https://docs.example.com/getting-started/intro",
+        "https://docs.example.com/actions/app-actions",
+        "https://docs.example.com/data/using-data",
+      ]
+    );
+    expect(prefix).toBe("/");
+  });
+
+  it("keeps shared prefix when nav links share a common root", () => {
+    const prefix = computeCommonPrefix(
+      "https://polar.sh/docs/api-reference/introduction",
+      [
+        "https://polar.sh/docs/api-reference/checkouts/create",
+        "https://polar.sh/docs/api-reference/customers/list",
+        "https://polar.sh/docs/api-reference/orders/get",
+      ]
+    );
+    expect(prefix).toBe("/docs/api-reference/");
+  });
+
+  it("handles single nav link", () => {
+    const prefix = computeCommonPrefix(
+      "https://example.com/docs/guide/intro",
+      ["https://example.com/docs/guide/setup"]
+    );
+    expect(prefix).toBe("/docs/guide/");
+  });
+
+  it("handles empty nav links array", () => {
+    const prefix = computeCommonPrefix(
+      "https://example.com/docs/guide/intro",
+      []
+    );
+    // With no nav links, prefix is the full path of the start URL
+    expect(prefix).toBe("/docs/guide/intro/");
   });
 });
 

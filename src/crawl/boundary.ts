@@ -19,6 +19,29 @@ export function getCrawlPrefix(url: string): {
 }
 
 /**
+ * Compute the longest common path prefix between a start URL and discovered nav URLs.
+ * Used to widen the crawl boundary when sidebar links span multiple sections.
+ */
+export function computeCommonPrefix(
+  startUrl: string,
+  navUrls: string[]
+): string {
+  const startParts = new URL(startUrl).pathname.split("/").filter(Boolean);
+  const parts = [...startParts];
+
+  for (const url of navUrls) {
+    const urlParts = new URL(url).pathname.split("/").filter(Boolean);
+    let i = 0;
+    while (i < parts.length && i < urlParts.length && parts[i] === urlParts[i]) {
+      i++;
+    }
+    parts.length = i;
+  }
+
+  return "/" + (parts.length > 0 ? parts.join("/") + "/" : "");
+}
+
+/**
  * Check whether a candidate URL falls within the crawl boundary.
  */
 export function isInBounds(

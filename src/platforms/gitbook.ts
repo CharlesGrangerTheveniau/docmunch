@@ -34,6 +34,6 @@ export const gitbook: PlatformStrategy = {
   },
 
   navLinkSelector(): string | null {
-    return "nav a[href]";
+    return "nav a[href], aside a[href]";
   },
 };

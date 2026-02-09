@@ -29,6 +29,6 @@ describe("gitbook platform strategy", () => {
   });
 
   it("returns nav link selector", () => {
-    expect(gitbook.navLinkSelector()).toBe("nav a[href]");
+    expect(gitbook.navLinkSelector()).toBe("nav a[href], aside a[href]");
   });
 });

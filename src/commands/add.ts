@@ -3,6 +3,7 @@ import { join } from "node:path";
 import consola from "consola";
 import { loadConfig, saveConfig, addSource } from "../config/manager";
 import type { Docs2aiConfig } from "../config/schema";
+import { slugFromUrl } from "../utils/url";
 
 export const addCommand = defineCommand({
   meta: {
@@ -32,16 +33,17 @@ export const addCommand = defineCommand({
     output: {
       type: "string",
       alias: "o",
-      description: "Output filename",
+      description: "Output filename or directory",
     },
   },
   run({ args }) {
     const url = args.url as string;
-    const crawl = args.crawl as boolean;
+    const shouldCrawl = args.crawl as boolean;
     const maxDepth = parseInt(args["max-depth"] as string, 10);
 
     const name = (args.name as string) || slugFromUrl(url);
-    const output = (args.output as string) || `${name}.md`;
+    const output =
+      (args.output as string) || (shouldCrawl ? `${name}/` : `${name}.md`);
 
     const existing = loadConfig();
     let config: Docs2aiConfig;
@@ -55,19 +57,10 @@ export const addCommand = defineCommand({
       config = { version: 1, outputDir: ".ai/docs", sources: [] };
     }
 
-    addSource(config, { name, url, crawl, maxDepth, output });
+    addSource(config, { name, url, crawl: shouldCrawl, maxDepth, output });
     saveConfig(config, configPath);
 
     consola.success(`Added source "${name}" → ${url}`);
     consola.info(`Config: ${configPath}`);
   },
 });
-
-function slugFromUrl(url: string): string {
-  try {
-    const parsed = new URL(url);
-    return parsed.hostname.replace(/\./g, "-").replace(/^www-/, "");
-  } catch {
-    return "source";
-  }
-}

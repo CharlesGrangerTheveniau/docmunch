@@ -23,4 +23,11 @@ export interface PlatformStrategy {
 
   /** CSS selector for sidebar/nav links (used in crawl mode) */
   navLinkSelector(): string | null;
+
+  /**
+   * Extract navigation URLs directly from page HTML.
+   * Used for SPA-rendered sidebars where links aren't in <a> tags.
+   * When provided, the crawler uses this instead of navLinkSelector.
+   */
+  discoverUrls?(html: string, baseUrl: string): string[];
 }

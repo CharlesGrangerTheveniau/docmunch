@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { write } from "../../src/pipeline/writer";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { write, writePage, writePages } from "../../src/pipeline/writer";
 import { writeFileSync, mkdirSync } from "node:fs";
 
 vi.mock("node:fs", () => ({
@@ -7,8 +7,8 @@ vi.mock("node:fs", () => ({
   mkdirSync: vi.fn(),
 }));
 
-afterEach(() => {
-  vi.restoreAllMocks();
+beforeEach(() => {
+  vi.clearAllMocks();
 });
 
 describe("write", () => {
@@ -56,5 +56,87 @@ describe("write", () => {
 
     const output = stdoutSpy.mock.calls[0][0] as string;
     expect(output).toContain("fetched_at:");
+  });
+});
+
+describe("writePage", () => {
+  it("writes frontmatter and content to the given file path", () => {
+    writePage("# Intro", "/out/docs/intro.md", {
+      sourceUrl: "https://example.com/docs/intro",
+      title: "Intro",
+      platform: "mintlify",
+    });
+
+    expect(mkdirSync).toHaveBeenCalledWith("/out/docs", { recursive: true });
+    expect(writeFileSync).toHaveBeenCalled();
+    const content = (writeFileSync as any).mock.calls[0][1] as string;
+    expect(content).toContain("https://example.com/docs/intro");
+    expect(content).toContain("title: Intro");
+    expect(content).toContain("# Intro");
+  });
+});
+
+describe("writePages", () => {
+  it("writes each page to its own file and returns manifest entries", () => {
+    const pages = [
+      {
+        url: "https://x.com/docs/intro",
+        title: "Intro",
+        platform: "generic",
+        markdown: "# Intro",
+      },
+      {
+        url: "https://x.com/docs/guides/auth",
+        title: "Auth Guide",
+        platform: "generic",
+        markdown: "# Auth",
+      },
+    ];
+
+    const entries = writePages(pages, "/out/example", "/docs/");
+
+    expect(entries).toEqual([
+      { title: "Intro", path: "intro.md" },
+      { title: "Auth Guide", path: "guides/auth.md" },
+    ]);
+
+    // Two writePage calls → two writeFileSync calls
+    expect(writeFileSync).toHaveBeenCalledTimes(2);
+  });
+
+  it("handles slug collisions with numeric suffix", () => {
+    const pages = [
+      {
+        url: "https://x.com/docs/intro",
+        title: "Intro 1",
+        platform: "generic",
+        markdown: "# Intro 1",
+      },
+      {
+        url: "https://x.com/docs/intro",
+        title: "Intro 2",
+        platform: "generic",
+        markdown: "# Intro 2",
+      },
+    ];
+
+    const entries = writePages(pages, "/out", "/docs/");
+
+    expect(entries[0].path).toBe("intro.md");
+    expect(entries[1].path).toBe("intro-2.md");
+  });
+
+  it("returns index.md for pages at the base prefix", () => {
+    const pages = [
+      {
+        url: "https://x.com/docs/",
+        title: "Overview",
+        platform: "generic",
+        markdown: "# Overview",
+      },
+    ];
+
+    const entries = writePages(pages, "/out", "/docs/");
+    expect(entries[0].path).toBe("index.md");
   });
 });

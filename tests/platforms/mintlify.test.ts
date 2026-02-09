@@ -30,6 +30,6 @@ describe("mintlify platform strategy", () => {
   });
 
   it("returns nav link selector", () => {
-    expect(mintlify.navLinkSelector()).toBe("nav a[href], .sidebar a[href]");
+    expect(mintlify.navLinkSelector()).toBe("nav a[href], .sidebar a[href], [class*='sidebar'] a[href]");
   });
 });

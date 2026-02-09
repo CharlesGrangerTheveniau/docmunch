@@ -1,13 +1,21 @@
 import { defineCommand } from "citty";
 import { join, dirname } from "node:path";
 import { mkdirSync } from "node:fs";
+import * as cheerio from "cheerio";
 import consola from "consola";
 import { loadConfig } from "../config/manager";
 import { fetchPage } from "../pipeline/fetcher";
 import { extract } from "../pipeline/extractor";
 import { transform } from "../pipeline/transformer";
-import { write } from "../pipeline/writer";
+import { write, writePages } from "../pipeline/writer";
 import { crawl } from "../crawl/crawler";
+import { resolve } from "../pipeline/resolver";
+import { getStrategy } from "../platforms/registry";
+import {
+  buildSourceManifest,
+  writeSourceManifest,
+  updateRootManifest,
+} from "../pipeline/manifest";
 
 export const updateCommand = defineCommand({
   meta: {
@@ -45,40 +53,88 @@ export const updateCommand = defineCommand({
     }
 
     for (const source of sources) {
-      const outputPath = join(configDir, config.outputDir, source.output);
-      mkdirSync(dirname(outputPath), { recursive: true });
+      const isDirectoryOutput = !source.output.endsWith(".md");
 
       consola.start(`Updating "${source.name}" from ${source.url}...`);
 
       if (source.crawl) {
-        const pages = await crawl(source.url, {
+        // Fetch first page to resolve platform and get link discovery
+        const firstHtml = await fetchPage(source.url);
+        const $ = cheerio.load(firstHtml);
+        const platformId = resolve(source.url, $);
+        const strategy = getStrategy(platformId);
+
+        const crawlResult = await crawl(source.url, {
           maxDepth: source.maxDepth,
+          navLinkSelector: strategy.navLinkSelector(),
+          discoverUrls: strategy.discoverUrls?.bind(strategy),
           onPageFetched: (url, current, total) => {
             consola.info(`  [${current}/${total}] ${url}`);
           },
         });
 
-        const sections: string[] = [];
-        let firstTitle = "";
-        let firstPlatform = "";
+        const { pages, effectivePrefix } = crawlResult;
 
-        for (const page of pages) {
-          const { content, title, platform } = extract(page.html, page.url);
-          if (!firstTitle) {
-            firstTitle = title;
-            firstPlatform = platform;
+        if (isDirectoryOutput) {
+          // Directory mode: one .md file per page + manifests
+          const outputDir = join(configDir, config.outputDir, source.output);
+          const pageEntries = pages.map((page) => {
+            const { content, title, platform } = extract(page.html, page.url);
+            const md = transform(content);
+            return { url: page.url, title, platform, markdown: md };
+          });
+
+          const firstPlatform = pageEntries[0]?.platform || "generic";
+          const manifestPages = writePages(pageEntries, outputDir, effectivePrefix);
+
+          const sourceManifest = buildSourceManifest(
+            source.name,
+            source.url,
+            firstPlatform,
+            manifestPages
+          );
+          writeSourceManifest(sourceManifest, outputDir);
+
+          const rootDir = join(configDir, config.outputDir);
+          updateRootManifest(rootDir, {
+            name: source.name,
+            path: source.output,
+            fetched_at: sourceManifest.fetched_at,
+          });
+
+          consola.success(`Updated "${source.name}" → ${outputDir} (${pages.length} pages)`);
+        } else {
+          // Single-file mode: stitch all pages together
+          const outputPath = join(configDir, config.outputDir, source.output);
+          mkdirSync(dirname(outputPath), { recursive: true });
+
+          const sections: string[] = [];
+          let firstTitle = "";
+          let firstPlatform = "";
+
+          for (const page of pages) {
+            const { content, title, platform } = extract(page.html, page.url);
+            if (!firstTitle) {
+              firstTitle = title;
+              firstPlatform = platform;
+            }
+            const md = transform(content);
+            sections.push(`## ${title}\n\nSource: ${page.url}\n\n${md}`);
           }
-          const md = transform(content);
-          sections.push(`## ${title}\n\nSource: ${page.url}\n\n${md}`);
-        }
 
-        const markdown = sections.join("\n\n---\n\n");
-        write(markdown, outputPath, {
-          sourceUrl: source.url,
-          title: firstTitle,
-          platform: firstPlatform,
-        });
+          const markdown = sections.join("\n\n---\n\n");
+          write(markdown, outputPath, {
+            sourceUrl: source.url,
+            title: firstTitle,
+            platform: firstPlatform,
+          });
+
+          consola.success(`Updated "${source.name}" → ${outputPath}`);
+        }
       } else {
+        const outputPath = join(configDir, config.outputDir, source.output);
+        mkdirSync(dirname(outputPath), { recursive: true });
+
         const html = await fetchPage(source.url);
         const { content, title, platform } = extract(html, source.url);
         const markdown = transform(content);
@@ -87,9 +143,9 @@ export const updateCommand = defineCommand({
           title,
           platform,
         });
-      }
 
-      consola.success(`Updated "${source.name}" → ${outputPath}`);
+        consola.success(`Updated "${source.name}" → ${outputPath}`);
+      }
     }
   },
 });

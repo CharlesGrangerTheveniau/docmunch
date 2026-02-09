@@ -16,7 +16,7 @@ URL → Resolver → Fetcher → Extractor → Transformer → Writer
 - **Fetcher**: Retrieves the raw HTML. Two modes: fast path (native `fetch`/`ofetch` for static/SSR sites) and heavy path (Playwright for JS-rendered SPAs). Handles crawl mode (following sidebar links, respecting crawl depth). Rate limiting and politeness logic lives here.
 - **Extractor**: Pulls meaningful content from raw HTML. Uses platform-specific selectors first (e.g. known content containers for Mintlify, Docusaurus), falls back to `@mozilla/readability` for generic extraction. Uses `cheerio` for DOM querying. Strips navbars, footers, cookie banners, sidebars.
 - **Transformer**: Converts clean HTML to Markdown via `Turndown` + `turndown-plugin-gfm`. Custom rules handle code blocks, callouts/admonitions, tabbed content, and tables. Code block preservation (language tags, indentation) is critical — never break code examples.
-- **Writer**: Outputs the final `.md` file with YAML frontmatter (source URL, fetch date, platform, title). Manages the `.doc2ctx.yaml` config file for multi-source projects.
+- **Writer**: Outputs Markdown with YAML frontmatter (source URL, fetch date, platform, title). Two output modes for crawl: single-file (all pages stitched with `---` separators) or directory (one `.md` per page with `_index.json` source manifest and `manifest.json` root manifest). Manages the `.doc2ctx.yaml` config file for multi-source projects.
 
 ## Tech Stack
 
@@ -50,7 +50,8 @@ doc2ctx/
 │   │   ├── fetcher.ts       # HTML fetching (static + browser)
 │   │   ├── extractor.ts     # Content extraction from HTML
 │   │   ├── transformer.ts   # HTML → Markdown conversion
-│   │   └── writer.ts        # File output + frontmatter
+│   │   ├── writer.ts        # File output + frontmatter (single & directory modes)
+│   │   └── manifest.ts      # JSON manifest generation (_index.json, manifest.json)
 │   ├── platforms/           # Platform-specific strategies
 │   │   ├── base.ts          # Base platform interface
 │   │   ├── mintlify.ts
@@ -65,7 +66,8 @@ doc2ctx/
 │   │   ├── schema.ts        # Config file types
 │   │   └── manager.ts       # Read/write .doc2ctx.yaml
 │   └── utils/
-│       ├── url.ts           # URL normalization, validation
+│       ├── url.ts           # URL normalization, validation, hostname slugging
+│       ├── slug.ts          # Pathname-based slugging for directory output
 │       ├── dedup.ts         # Content deduplication for multi-page crawls
 │       └── tokens.ts        # Token estimation (future)
 ├── tests/
@@ -90,10 +92,17 @@ doc2ctx https://developers.yousign.com/docs/set-up-your-account
 # One-shot: fetch and write to file
 doc2ctx https://developers.yousign.com/docs/set-up-your-account -o .ai/yousign.md
 
-# Crawl mode: follow sidebar/nav links
-doc2ctx https://developers.yousign.com/docs/set-up-your-account --crawl --max-depth 2 -o .ai/yousign.md
+# Crawl mode: directory output (one .md per page + manifests)
+# Defaults to .ai/docs/<name>/ when no -o is given
+doc2ctx https://developers.yousign.com/docs/set-up-your-account --crawl --name yousign
 
-# Add a source to project config
+# Crawl mode: explicit directory output
+doc2ctx https://developers.yousign.com/docs/set-up-your-account --crawl -o .ai/docs/yousign/
+
+# Crawl mode: single-file output (backward compatible, when -o ends with .md)
+doc2ctx https://developers.yousign.com/docs/set-up-your-account --crawl -o .ai/yousign.md
+
+# Add a source to project config (crawl sources default to directory output)
 doc2ctx add https://docs.stripe.com/api/charges --name stripe --crawl
 
 # Refresh all configured sources
@@ -116,16 +125,18 @@ sources:
     url: https://developers.yousign.com/docs/set-up-your-account
     crawl: true
     max_depth: 2
-    output: yousign.md
+    output: yousign/          # directory output (one .md per page + _index.json)
   - name: stripe
     url: https://docs.stripe.com/api/charges
     crawl: false
-    output: stripe-charges.md
+    output: stripe-charges.md # single-file output
 ```
 
-## Output Markdown Format
+## Output Formats
 
-Generated files should have this structure:
+### Single-file output
+
+Used for non-crawl fetches, or crawl with `-o file.md`:
 
 ```markdown
 ---
@@ -133,12 +144,52 @@ source: https://developers.yousign.com/docs/set-up-your-account
 fetched_at: 2025-02-08T14:30:00Z
 platform: mintlify
 title: Set Up Your Account
-doc2ctx_version: 0.1.0
+docs2ai_version: 0.1.0
 ---
 
 # Set Up Your Account
 
 [clean extracted content here]
+```
+
+### Directory output (crawl mode default)
+
+One `.md` file per crawled page, with JSON manifests for machine consumption:
+
+```
+.ai/docs/
+├── manifest.json              ← root manifest (all sources)
+└── yousign/
+    ├── _index.json            ← source manifest (this source's pages)
+    ├── set-up-your-account.md
+    ├── guides/
+    │   └── authentication.md
+    └── api/
+        └── webhooks.md
+```
+
+Each page `.md` has the same frontmatter as single-file output. The `_index.json` manifest:
+
+```json
+{
+  "name": "yousign",
+  "url": "https://developers.yousign.com/docs/set-up-your-account",
+  "platform": "mintlify",
+  "fetched_at": "2025-02-08T14:30:00Z",
+  "pages": [
+    { "title": "Set Up Your Account", "path": "set-up-your-account.md" },
+    { "title": "Authentication", "path": "guides/authentication.md" }
+  ]
+}
+```
+
+### Output mode decision logic
+
+```
+if (!crawl)                          → single file (unchanged)
+if (crawl && -o ends with .md)       → single file (backward compat)
+if (crawl && no -o)                  → directory at .ai/docs/<name>/
+if (crawl && -o doesn't end with .md)→ directory at -o path
 ```
 
 ## Design Principles
@@ -173,10 +224,11 @@ doc2ctx_version: 0.1.0
 
 Ship a working CLI that can:
 1. Take a single URL and output clean Markdown to stdout or a file
-2. Detect and handle at least: Mintlify, Docusaurus, and generic sites
+2. Detect and handle at least: Mintlify, Docusaurus, GitBook, ReadMe, and generic sites
 3. Preserve code blocks perfectly
 4. Include proper frontmatter
-5. Support basic crawl mode (follow nav/sidebar links)
+5. Support crawl mode with directory output (one .md per page + JSON manifests)
+6. Backward-compatible single-file crawl output when `-o file.md` is used
 
 NOT in scope for v0.1:
 - LLM-based summarization or token budgets
@@ -191,4 +243,4 @@ NOT in scope for v0.1:
 - Sidebar navigation structures vary wildly between platforms. Don't assume a single CSS selector works everywhere. The resolver + platform strategy pattern exists for this reason.
 - Some doc sites use custom web components (e.g. `<code-block>`, `<callout>`) that Turndown won't know about. Add custom Turndown rules for common ones.
 - When crawling, avoid infinite loops from circular links. Track visited URLs.
-- When stitching multi-page crawls into one file, add clear `## Page: <title>` separators and deduplicate repeated headers/footers.
+- When stitching multi-page crawls into one file (single-file mode), add clear `## Page: <title>` separators and deduplicate repeated headers/footers. Directory mode avoids this problem by writing one file per page.
