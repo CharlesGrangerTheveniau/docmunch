@@ -45,19 +45,37 @@ docs2ai list              # show configured sources
 
 Once you've crawled documentation, `docs2ai serve` starts an MCP server that lets AI coding tools query your docs directly.
 
+> **Prerequisite:** Install docs2ai globally (`npm install -g docs2ai`) or use `npx` to run it without installing. The setup examples below use `npx`, which downloads the package automatically if needed.
+
 ### Quick start
 
 ```bash
 # 1. Crawl some docs
-docs2ai https://docs.stripe.com/api/charges --crawl --name stripe
+npx docs2ai https://docs.stripe.com/api/charges --crawl --name stripe
 
 # 2. Start the MCP server
-docs2ai serve
+npx docs2ai serve
 ```
 
 ### Claude Code
 
-Add to `.mcp.json` in your project root:
+```bash
+claude mcp add --scope project docs2ai -- npx docs2ai serve -d .ai/docs/
+```
+
+That's it. Run `/mcp` inside Claude Code to verify the server is connected.
+
+Use `--scope user` instead to make it available across all your projects.
+
+### Cursor
+
+Open Cursor Settings (`Cmd+,` / `Ctrl+,`) → **MCP** → **+ Add new MCP server**, then:
+
+- **Name**: `docs2ai`
+- **Type**: `command`
+- **Command**: `npx docs2ai serve -d .ai/docs/`
+
+Alternatively, create a `.cursor/mcp.json` file at your project root:
 
 ```json
 {
@@ -70,7 +88,11 @@ Add to `.mcp.json` in your project root:
 }
 ```
 
-Claude Code will then have access to 4 tools:
+Restart Cursor for the server to be picked up. A green dot next to the server name in Settings → MCP confirms it's running.
+
+### Available tools
+
+Once connected, your AI assistant has access to:
 
 - **`list_sources`** — see all available documentation sources
 - **`list_pages`** — list pages within a source

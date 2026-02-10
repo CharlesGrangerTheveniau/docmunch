@@ -5,6 +5,7 @@ export default defineConfig({
   format: ["esm"],
   target: "node18",
   clean: true,
+  external: ["playwright"],
   dts: false,
   splitting: false,
   sourcemap: true,

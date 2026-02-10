@@ -141,7 +141,23 @@ The server reads the on-disk directory structure produced by crawl mode (`manife
 | `read_page` | `source`, `path` | Full markdown content of one page |
 | `search_docs` | `query`, `source?`, `limit?` | Matching pages (metadata only, no content) |
 
-### Claude Code configuration
+### Claude Code setup
+
+```bash
+claude mcp add --scope project docs2ai -- npx docs2ai serve -d .ai/docs/
+```
+
+Run `/mcp` inside Claude Code to verify the connection. Use `--scope user` instead to make it available across all projects.
+
+### Cursor setup
+
+Open Settings (`Cmd+,` / `Ctrl+,`) → **MCP** → **+ Add new MCP server**:
+
+- **Name**: `docs2ai`
+- **Type**: `command`
+- **Command**: `npx docs2ai serve -d .ai/docs/`
+
+Or create `.cursor/mcp.json` at the project root:
 
 ```json
 {
@@ -153,6 +169,8 @@ The server reads the on-disk directory structure produced by crawl mode (`manife
   }
 }
 ```
+
+Restart Cursor for the server to be picked up. A green dot in Settings → MCP confirms it's running.
 
 ### Architecture notes
 
