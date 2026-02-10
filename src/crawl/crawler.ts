@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import * as readline from "node:readline";
 import { fetchPage } from "../pipeline/fetcher";
 import {
   getCrawlPrefix,
@@ -28,6 +29,7 @@ export interface CrawlOptions {
 /**
  * Crawl documentation pages starting from a URL.
  * Follows in-bounds links via BFS up to maxDepth.
+ * On SIGINT (Ctrl+C), stops gracefully and returns pages collected so far.
  */
 export async function crawl(
   startUrl: string,
@@ -38,57 +40,92 @@ export async function crawl(
   const visited = new Set<string>();
   const results: CrawledPage[] = [];
   let isFirstPage = true;
+  let interrupted = false;
+  let saveOnInterrupt = false;
+
+  const onSigint = async () => {
+    if (interrupted) {
+      // Second Ctrl+C — force exit
+      process.exit(1);
+    }
+    interrupted = true;
+
+    if (results.length === 0) {
+      process.exit(0);
+    }
+
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stderr,
+    });
+    const answer = await new Promise<string>((resolve) => {
+      rl.question(
+        `\nCrawl interrupted. Save ${results.length} page(s) collected so far? (y/n) `,
+        resolve
+      );
+    });
+    rl.close();
+    saveOnInterrupt = answer.trim().toLowerCase().startsWith("y");
+    if (!saveOnInterrupt) {
+      process.exit(0);
+    }
+  };
+  process.on("SIGINT", onSigint);
 
   // BFS queue: [url, depth]
   const queue: [string, number][] = [[startUrl, 0]];
   visited.add(normalizeUrl(startUrl));
 
-  while (queue.length > 0) {
-    const [url, depth] = queue.shift()!;
+  try {
+    while (queue.length > 0 && !interrupted) {
+      const [url, depth] = queue.shift()!;
 
-    let html: string;
-    try {
-      html = await fetchPage(url);
-    } catch {
+      let html: string;
+      try {
+        html = await fetchPage(url);
+      } catch {
+        options.onPageFetched?.(url, results.length, results.length + queue.length);
+        continue;
+      }
+      results.push({ url, html });
       options.onPageFetched?.(url, results.length, results.length + queue.length);
-      continue;
-    }
-    results.push({ url, html });
-    options.onPageFetched?.(url, results.length, results.length + queue.length);
 
-    if (depth < options.maxDepth) {
-      // On the first page, widen the boundary using nav links (only when a
-      // platform-specific navLinkSelector or custom discovery is available —
-      // generic sites use all <a> tags which would collapse the prefix to "/")
-      if (isFirstPage) {
-        const hasNavScope = !!options.navLinkSelector || !!options.discoverUrls;
-        if (hasNavScope) {
-          const allNavUrls = options.discoverUrls
-            ? discoverSameOriginCustom(html, url, origin, options.discoverUrls)
-            : discoverSameOrigin(html, url, origin, options.navLinkSelector);
-          if (allNavUrls.length > 0) {
-            pathPrefix = computeCommonPrefix(startUrl, allNavUrls);
+      if (depth < options.maxDepth) {
+        // On the first page, widen the boundary using nav links (only when a
+        // platform-specific navLinkSelector or custom discovery is available —
+        // generic sites use all <a> tags which would collapse the prefix to "/")
+        if (isFirstPage) {
+          const hasNavScope = !!options.navLinkSelector;
+          if (hasNavScope) {
+            const allNavUrls = options.discoverUrls
+              ? discoverSameOriginCustom(html, url, origin, options.discoverUrls)
+              : discoverSameOrigin(html, url, origin, options.navLinkSelector);
+            if (allNavUrls.length > 0) {
+              pathPrefix = computeCommonPrefix(startUrl, allNavUrls);
+            }
+          }
+          isFirstPage = false;
+        }
+
+        const links = options.discoverUrls
+          ? discoverLinksCustom(html, url, origin, pathPrefix, options.discoverUrls)
+          : discoverLinks(html, url, origin, pathPrefix, options.navLinkSelector);
+        for (const link of links) {
+          const normalized = normalizeUrl(link);
+          if (!visited.has(normalized)) {
+            visited.add(normalized);
+            queue.push([link, depth + 1]);
           }
         }
-        isFirstPage = false;
       }
 
-      const links = options.discoverUrls
-        ? discoverLinksCustom(html, url, origin, pathPrefix, options.discoverUrls)
-        : discoverLinks(html, url, origin, pathPrefix, options.navLinkSelector);
-      for (const link of links) {
-        const normalized = normalizeUrl(link);
-        if (!visited.has(normalized)) {
-          visited.add(normalized);
-          queue.push([link, depth + 1]);
-        }
+      // Politeness delay between requests
+      if (queue.length > 0 && !interrupted) {
+        await delay(200);
       }
     }
-
-    // Politeness delay between requests
-    if (queue.length > 0) {
-      await delay(200);
-    }
+  } finally {
+    process.off("SIGINT", onSigint);
   }
 
   return { pages: results, effectivePrefix: pathPrefix };
