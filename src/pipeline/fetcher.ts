@@ -1,4 +1,5 @@
 import { ofetch } from "ofetch";
+import { execSync } from "node:child_process";
 import consola from "consola";
 
 /** HTTP status codes that warrant a Playwright retry */
@@ -65,11 +66,21 @@ async function loadPlaywright() {
   try {
     return await import("playwright");
   } catch {
-    const err = new Error(
-      "Playwright is not installed. Run:\n  npm install -D playwright && npx playwright install chromium"
+    consola.info(
+      "This site requires a browser to fetch. Installing Playwright..."
     );
-    (err as any).code = "ERR_PLAYWRIGHT_NOT_INSTALLED";
-    throw err;
+    try {
+      execSync("npm install -g playwright", { stdio: "inherit" });
+      execSync("npx playwright install chromium", { stdio: "inherit" });
+      return await import("playwright");
+    } catch {
+      const err = new Error(
+        "Failed to auto-install Playwright. Install it manually:\n\n" +
+          "  npm install -g playwright && npx playwright install chromium\n"
+      );
+      (err as any).code = "ERR_PLAYWRIGHT_NOT_INSTALLED";
+      throw err;
+    }
   }
 }
 

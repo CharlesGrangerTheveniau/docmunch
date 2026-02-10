@@ -1,9 +1,28 @@
 import { defineCommand, runMain, runCommand } from "citty";
+import consola from "consola";
 import { fetchCommand } from "./commands/fetch";
 import { addCommand } from "./commands/add";
 import { updateCommand } from "./commands/update";
 import { listCommand } from "./commands/list";
 import { serveCommand } from "./commands/serve";
+
+process.on("uncaughtException", (err: any) => {
+  if (err.code === "ERR_PLAYWRIGHT_NOT_INSTALLED") {
+    consola.error(err.message);
+  } else {
+    consola.error(err.message || err);
+  }
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (err: any) => {
+  if (err?.code === "ERR_PLAYWRIGHT_NOT_INSTALLED") {
+    consola.error(err.message);
+  } else {
+    consola.error(err?.message || err);
+  }
+  process.exit(1);
+});
 
 const subCommands: Record<string, any> = {
   add: addCommand,
