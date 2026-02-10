@@ -2,13 +2,13 @@ import { defineCommand } from "citty";
 import { join } from "node:path";
 import consola from "consola";
 import { loadConfig, saveConfig, addSource } from "../config/manager";
-import type { Docs2aiConfig } from "../config/schema";
+import type { DocmunchConfig } from "../config/schema";
 import { slugFromUrl } from "../utils/url";
 
 export const addCommand = defineCommand({
   meta: {
     name: "add",
-    description: "Add a documentation source to .docs2ai.yaml",
+    description: "Add a documentation source to .docmunch.yaml",
   },
   args: {
     url: {
@@ -46,14 +46,14 @@ export const addCommand = defineCommand({
       (args.output as string) || (shouldCrawl ? `${name}/` : `${name}.md`);
 
     const existing = loadConfig();
-    let config: Docs2aiConfig;
+    let config: DocmunchConfig;
     let configPath: string;
 
     if (existing) {
       config = existing.config;
       configPath = existing.configPath;
     } else {
-      configPath = join(process.cwd(), ".docs2ai.yaml");
+      configPath = join(process.cwd(), ".docmunch.yaml");
       config = { version: 1, outputDir: ".ai/docs", sources: [] };
     }
 

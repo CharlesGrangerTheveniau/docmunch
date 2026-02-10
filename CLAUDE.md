@@ -1,8 +1,8 @@
-# CLAUDE.md — docs2ai
+# CLAUDE.md — docmunch
 
 ## Project Overview
 
-docs2ai is an open-source CLI tool that converts online documentation pages into clean, AI-ready Markdown files. The goal is to let developers paste a documentation URL and get a `.md` file they can drop into their project so that AI coding assistants (Cursor, Claude Code, Copilot, etc.) have accurate, up-to-date context about the APIs and libraries they're using.
+docmunch is an open-source CLI tool that converts online documentation pages into clean, AI-ready Markdown files. The goal is to let developers paste a documentation URL and get a `.md` file they can drop into their project so that AI coding assistants (Cursor, Claude Code, Copilot, etc.) have accurate, up-to-date context about the APIs and libraries they're using.
 
 ## Core Pipeline
 
@@ -16,7 +16,7 @@ URL → Resolver → Fetcher → Extractor → Transformer → Writer
 - **Fetcher**: Retrieves the raw HTML. Three-tier fallback: (1) fast static fetch via `ofetch`, (2) headless Playwright if static fetch fails (403/406/429), (3) visible (non-headless) Playwright if bot protection challenge is detected (Cloudflare, etc.). Playwright is auto-installed on first need. Rate limiting and politeness logic lives here.
 - **Extractor**: Pulls meaningful content from raw HTML. Uses platform-specific selectors first (e.g. known content containers for Mintlify, Docusaurus), falls back to `@mozilla/readability` for generic extraction. Uses `cheerio` for DOM querying. Strips navbars, footers, cookie banners, sidebars.
 - **Transformer**: Converts clean HTML to Markdown via `Turndown` + `turndown-plugin-gfm`. Custom rules handle code blocks, callouts/admonitions, tabbed content, and tables. Code block preservation (language tags, indentation) is critical — never break code examples.
-- **Writer**: Outputs Markdown with YAML frontmatter (source URL, fetch date, platform, title). Two output modes for crawl: single-file (all pages stitched with `---` separators) or directory (one `.md` per page with `_index.json` source manifest and `manifest.json` root manifest). Manages the `.docs2ai.yaml` config file for multi-source projects.
+- **Writer**: Outputs Markdown with YAML frontmatter (source URL, fetch date, platform, title). Two output modes for crawl: single-file (all pages stitched with `---` separators) or directory (one `.md` per page with `_index.json` source manifest and `manifest.json` root manifest). Manages the `.docmunch.yaml` config file for multi-source projects.
 
 ## Tech Stack
 
@@ -29,7 +29,7 @@ URL → Resolver → Fetcher → Extractor → Transformer → Writer
 - **DOM parsing**: `cheerio` for HTML querying and platform-specific selectors
 - **Content extraction**: `@mozilla/readability` for generic content isolation
 - **HTML → Markdown**: `turndown` + `turndown-plugin-gfm`
-- **Config**: `js-yaml` for `.docs2ai.yaml`, `gray-matter` for frontmatter
+- **Config**: `js-yaml` for `.docmunch.yaml`, `gray-matter` for frontmatter
 - **MCP**: `@modelcontextprotocol/sdk` for Model Context Protocol server, `zod` for tool input schemas
 - **Search**: `minisearch` for full-text search over loaded docs
 - **Build**: `tsup` for building the CLI
@@ -39,15 +39,15 @@ URL → Resolver → Fetcher → Extractor → Transformer → Writer
 ## Project Structure
 
 ```
-docs2ai/
+docmunch/
 ├── src/
 │   ├── cli.ts              # CLI entry point, command definitions
 │   ├── commands/
-│   │   ├── fetch.ts         # `docs2ai <url>` — one-shot extraction
-│   │   ├── add.ts           # `docs2ai add <url>` — add source to config
-│   │   ├── update.ts        # `docs2ai update` — refresh all sources
-│   │   ├── list.ts          # `docs2ai list` — show configured sources
-│   │   └── serve.ts         # `docs2ai serve` — start MCP server
+│   │   ├── fetch.ts         # `docmunch <url>` — one-shot extraction
+│   │   ├── add.ts           # `docmunch add <url>` — add source to config
+│   │   ├── update.ts        # `docmunch update` — refresh all sources
+│   │   ├── list.ts          # `docmunch list` — show configured sources
+│   │   └── serve.ts         # `docmunch serve` — start MCP server
 │   ├── pipeline/
 │   │   ├── resolver.ts      # Platform detection
 │   │   ├── fetcher.ts       # HTML fetching (static + browser)
@@ -71,7 +71,7 @@ docs2ai/
 │   │   └── server.ts        # MCP server with 4 tools
 │   ├── config/
 │   │   ├── schema.ts        # Config file types
-│   │   └── manager.ts       # Read/write .docs2ai.yaml
+│   │   └── manager.ts       # Read/write .docmunch.yaml
 │   └── utils/
 │       ├── url.ts           # URL normalization, validation, hostname slugging
 │       ├── slug.ts          # Pathname-based slugging for directory output
@@ -85,7 +85,7 @@ docs2ai/
 ├── tsconfig.json
 ├── tsup.config.ts
 ├── vitest.config.ts
-├── .docs2ai.yaml            # Example config
+├── .docmunch.yaml            # Example config
 ├── CLAUDE.md
 └── README.md
 ```
@@ -94,36 +94,36 @@ docs2ai/
 
 ```bash
 # One-shot: fetch a single URL, output to stdout
-docs2ai https://developers.yousign.com/docs/set-up-your-account
+docmunch https://developers.yousign.com/docs/set-up-your-account
 
 # One-shot: fetch and write to file
-docs2ai https://developers.yousign.com/docs/set-up-your-account -o .ai/yousign.md
+docmunch https://developers.yousign.com/docs/set-up-your-account -o .ai/yousign.md
 
 # Crawl mode: directory output (one .md per page + manifests)
 # Defaults to .ai/docs/<name>/ when no -o is given
-docs2ai https://developers.yousign.com/docs/set-up-your-account --crawl --name yousign
+docmunch https://developers.yousign.com/docs/set-up-your-account --crawl --name yousign
 
 # Crawl mode: explicit directory output
-docs2ai https://developers.yousign.com/docs/set-up-your-account --crawl -o .ai/docs/yousign/
+docmunch https://developers.yousign.com/docs/set-up-your-account --crawl -o .ai/docs/yousign/
 
 # Crawl mode: single-file output (backward compatible, when -o ends with .md)
-docs2ai https://developers.yousign.com/docs/set-up-your-account --crawl -o .ai/yousign.md
+docmunch https://developers.yousign.com/docs/set-up-your-account --crawl -o .ai/yousign.md
 
 # Add a source to project config (crawl sources default to directory output)
-docs2ai add https://docs.stripe.com/api/charges --name stripe --crawl
+docmunch add https://docs.stripe.com/api/charges --name stripe --crawl
 
 # Refresh all configured sources
-docs2ai update
+docmunch update
 
 # Refresh one source
-docs2ai update --name stripe
+docmunch update --name stripe
 
 # List configured sources
-docs2ai list
+docmunch list
 
 # Start MCP server (exposes docs to AI tools via Model Context Protocol)
-docs2ai serve                          # default: serves .ai/docs/
-docs2ai serve -d ./my-docs/            # custom directory
+docmunch serve                          # default: serves .ai/docs/
+docmunch serve -d ./my-docs/            # custom directory
 ```
 
 ## MCP Server
@@ -144,7 +144,7 @@ The server reads the on-disk directory structure produced by crawl mode (`manife
 ### Claude Code setup
 
 ```bash
-claude mcp add --scope project docs2ai -- npx docs2ai serve -d .ai/docs/
+claude mcp add --scope project docmunch -- npx docmunch serve -d .ai/docs/
 ```
 
 Run `/mcp` inside Claude Code to verify the connection. Use `--scope user` instead to make it available across all projects.
@@ -153,18 +153,18 @@ Run `/mcp` inside Claude Code to verify the connection. Use `--scope user` inste
 
 Open Settings (`Cmd+,` / `Ctrl+,`) → **MCP** → **+ Add new MCP server**:
 
-- **Name**: `docs2ai`
+- **Name**: `docmunch`
 - **Type**: `command`
-- **Command**: `npx docs2ai serve -d .ai/docs/`
+- **Command**: `npx docmunch serve -d .ai/docs/`
 
 Or create `.cursor/mcp.json` at the project root:
 
 ```json
 {
   "mcpServers": {
-    "docs2ai": {
+    "docmunch": {
       "command": "npx",
-      "args": ["docs2ai", "serve", "-d", ".ai/docs/"]
+      "args": ["docmunch", "serve", "-d", ".ai/docs/"]
     }
   }
 }
@@ -181,7 +181,7 @@ Restart Cursor for the server to be picked up. A green dot in Settings → MCP c
 - **Eager loading** — all markdown loaded at startup since the search index needs it. 100-200 pages is well within memory limits.
 - **Token-efficient** — `list_sources`, `list_pages`, and `search_docs` return metadata only. Only `read_page` returns full content, minimizing context window usage.
 
-## Config File Format (.docs2ai.yaml)
+## Config File Format (.docmunch.yaml)
 
 ```yaml
 version: 1
@@ -210,7 +210,7 @@ source: https://developers.yousign.com/docs/set-up-your-account
 fetched_at: 2025-02-08T14:30:00Z
 platform: mintlify
 title: Set Up Your Account
-docs2ai_version: 0.1.0
+docmunch_version: 0.1.0
 ---
 
 # Set Up Your Account
@@ -263,7 +263,7 @@ if (crawl && -o doesn't end with .md)→ directory at -o path
 1. **Code blocks are sacred.** Never break, reformat, or lose code examples during extraction. Language tags and indentation must survive perfectly. Test this aggressively.
 2. **Playwright is auto-installed.** The core static fetch path works without Playwright. When a site blocks static fetch (403, Cloudflare), the fetcher auto-installs Playwright globally on first need and retries with a browser. No manual setup required.
 3. **Platform strategies are pluggable.** Adding support for a new doc platform should mean adding one file in `src/platforms/` that implements the base interface. No changes to the pipeline.
-4. **Sensible defaults, full control.** The tool should work great with zero config (`docs2ai <url>`), but power users can control crawl depth, output paths, and more.
+4. **Sensible defaults, full control.** The tool should work great with zero config (`docmunch <url>`), but power users can control crawl depth, output paths, and more.
 5. **Deterministic and testable.** Use saved HTML fixtures for tests so they don't depend on live sites. The pipeline is pure functions where possible (input HTML → output Markdown).
 6. **Lean dependencies.** Don't add dependencies for things the stdlib can handle. Every dependency should earn its place.
 

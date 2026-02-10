@@ -39,7 +39,7 @@ if (isSubCommand) {
   // Let citty handle subcommand routing
   const main = defineCommand({
     meta: {
-      name: "docs2ai",
+      name: "docmunch",
       version: "0.1.0",
       description: "Convert documentation URLs into AI-ready Markdown files",
     },
@@ -53,18 +53,18 @@ if (isSubCommand) {
   // No args or --help — show usage
   const main = defineCommand({
     meta: {
-      name: "docs2ai",
+      name: "docmunch",
       version: "0.1.0",
       description: "Convert documentation URLs into AI-ready Markdown files",
     },
     subCommands,
     run() {
-      console.log("Usage: docs2ai <url> [-o output.md] [--crawl]");
-      console.log("       docs2ai add <url> [--name name] [--crawl]");
-      console.log("       docs2ai update [--name name]");
-      console.log("       docs2ai list");
-      console.log("       docs2ai serve [-d dir]");
-      console.log("\nRun `docs2ai --help` for full usage.");
+      console.log("Usage: docmunch <url> [-o output.md] [--crawl]");
+      console.log("       docmunch add <url> [--name name] [--crawl]");
+      console.log("       docmunch update [--name name]");
+      console.log("       docmunch list");
+      console.log("       docmunch serve [-d dir]");
+      console.log("\nRun `docmunch --help` for full usage.");
     },
   });
   runMain(main);

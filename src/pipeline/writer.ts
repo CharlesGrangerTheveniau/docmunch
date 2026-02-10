@@ -22,7 +22,7 @@ export function write(
     fetched_at: new Date().toISOString(),
     platform: options.platform,
     title: options.title,
-    docs2ai_version: "0.1.0",
+    docmunch_version: "0.2.0",
   });
 
   if (outputPath) {
@@ -46,7 +46,7 @@ export function writePage(
     fetched_at: new Date().toISOString(),
     platform: options.platform,
     title: options.title,
-    docs2ai_version: "0.1.0",
+    docmunch_version: "0.2.0",
   });
 
   mkdirSync(dirname(filePath), { recursive: true });

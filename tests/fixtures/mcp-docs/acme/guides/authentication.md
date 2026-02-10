@@ -3,7 +3,7 @@ source: https://docs.acme.com/guides/authentication
 fetched_at: '2025-06-01T10:00:00Z'
 platform: mintlify
 title: Authentication Guide
-docs2ai_version: 0.1.0
+docmunch_version: 0.2.0
 ---
 
 # Authentication Guide

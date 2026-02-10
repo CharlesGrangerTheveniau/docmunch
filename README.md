@@ -1,4 +1,4 @@
-# docs2ai
+# docmunch
 
 Convert documentation URLs into clean, AI-ready Markdown files. Drop them into your project so AI coding assistants (Cursor, Claude Code, Copilot, etc.) have accurate, up-to-date context.
 
@@ -6,29 +6,29 @@ Convert documentation URLs into clean, AI-ready Markdown files. Drop them into y
 
 ```bash
 # Run directly
-npx docs2ai <url>
+npx docmunch <url>
 
 # Or install globally
-npm install -g docs2ai
+npm install -g docmunch
 ```
 
 ## Usage
 
 ```bash
 # Fetch a single page to stdout
-docs2ai https://docs.stripe.com/api/charges
+docmunch https://docs.stripe.com/api/charges
 
 # Write to a file
-docs2ai https://docs.stripe.com/api/charges -o .ai/stripe.md
+docmunch https://docs.stripe.com/api/charges -o .ai/stripe.md
 
 # Crawl linked pages
-docs2ai https://docs.stripe.com/api/charges --crawl --max-depth 2 -o .ai/stripe.md
+docmunch https://docs.stripe.com/api/charges --crawl --max-depth 2 -o .ai/stripe.md
 
 # Manage sources in a config file
-docs2ai add https://docs.stripe.com/api/charges --name stripe --crawl
-docs2ai update            # refresh all sources
-docs2ai update --name stripe  # refresh one
-docs2ai list              # show configured sources
+docmunch add https://docs.stripe.com/api/charges --name stripe --crawl
+docmunch update            # refresh all sources
+docmunch update --name stripe  # refresh one
+docmunch list              # show configured sources
 ```
 
 ## Features
@@ -39,29 +39,29 @@ docs2ai list              # show configured sources
 - **Smart fetching** — static fetch by default, auto-retries with Playwright for blocked sites (403, Cloudflare). Playwright is auto-installed on first need
 - **Graceful interruption** — press Ctrl+C during a crawl to stop and choose whether to save pages collected so far
 - **YAML frontmatter** — each output includes source URL, fetch date, platform, and title
-- **Config file** — manage multiple doc sources with `.docs2ai.yaml`
+- **Config file** — manage multiple doc sources with `.docmunch.yaml`
 - **MCP server** — expose fetched docs to AI tools (Claude Code, Cursor) via Model Context Protocol
 
 ## MCP Server
 
-Once you've crawled documentation, `docs2ai serve` starts an MCP server that lets AI coding tools query your docs directly.
+Once you've crawled documentation, `docmunch serve` starts an MCP server that lets AI coding tools query your docs directly.
 
-> **Prerequisite:** Install docs2ai globally (`npm install -g docs2ai`) or use `npx` to run it without installing. The setup examples below use `npx`, which downloads the package automatically if needed.
+> **Prerequisite:** Install docmunch globally (`npm install -g docmunch`) or use `npx` to run it without installing. The setup examples below use `npx`, which downloads the package automatically if needed.
 
 ### Quick start
 
 ```bash
 # 1. Crawl some docs
-npx docs2ai https://docs.stripe.com/api/charges --crawl --name stripe
+npx docmunch https://docs.stripe.com/api/charges --crawl --name stripe
 
 # 2. Start the MCP server
-npx docs2ai serve
+npx docmunch serve
 ```
 
 ### Claude Code
 
 ```bash
-claude mcp add --scope project docs2ai -- npx docs2ai serve -d .ai/docs/
+claude mcp add --scope project docmunch -- npx docmunch serve -d .ai/docs/
 ```
 
 That's it. Run `/mcp` inside Claude Code to verify the server is connected.
@@ -72,18 +72,18 @@ Use `--scope user` instead to make it available across all your projects.
 
 Open Cursor Settings (`Cmd+,` / `Ctrl+,`) → **MCP** → **+ Add new MCP server**, then:
 
-- **Name**: `docs2ai`
+- **Name**: `docmunch`
 - **Type**: `command`
-- **Command**: `npx docs2ai serve -d .ai/docs/`
+- **Command**: `npx docmunch serve -d .ai/docs/`
 
 Alternatively, create a `.cursor/mcp.json` file at your project root:
 
 ```json
 {
   "mcpServers": {
-    "docs2ai": {
+    "docmunch": {
       "command": "npx",
-      "args": ["docs2ai", "serve", "-d", ".ai/docs/"]
+      "args": ["docmunch", "serve", "-d", ".ai/docs/"]
     }
   }
 }
@@ -103,11 +103,11 @@ Once connected, your AI assistant has access to:
 ### Options
 
 ```bash
-docs2ai serve              # serves .ai/docs/ (default)
-docs2ai serve -d ./docs/   # custom directory
+docmunch serve              # serves .ai/docs/ (default)
+docmunch serve -d ./docs/   # custom directory
 ```
 
-## Config (.docs2ai.yaml)
+## Config (.docmunch.yaml)
 
 ```yaml
 version: 1

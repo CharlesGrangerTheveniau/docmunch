@@ -1,10 +1,10 @@
 {
-  "name": "docs2ai",
-  "version": "0.1.10",
+  "name": "docmunch",
+  "version": "0.2.0",
   "description": "Convert online documentation into AI-ready Markdown context files",
   "type": "module",
   "bin": {
-    "docs2ai": "dist/cli.mjs"
+    "docmunch": "dist/cli.mjs"
   },
   "scripts": {
     "dev": "tsx src/cli.ts",

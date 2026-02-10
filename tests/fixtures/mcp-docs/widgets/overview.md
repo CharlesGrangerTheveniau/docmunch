@@ -3,7 +3,7 @@ source: https://widgets.io/docs/overview
 fetched_at: '2025-06-02T12:00:00Z'
 platform: docusaurus
 title: Widgets Overview
-docs2ai_version: 0.1.0
+docmunch_version: 0.2.0
 ---
 
 # Widgets Overview

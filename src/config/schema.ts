@@ -7,8 +7,8 @@ export interface SourceConfig {
   output: string;
 }
 
-/** Top-level .docs2ai.yaml configuration. */
-export interface Docs2aiConfig {
+/** Top-level .docmunch.yaml configuration. */
+export interface DocmunchConfig {
   version: number;
   outputDir: string;
   sources: SourceConfig[];

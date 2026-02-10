@@ -1,16 +1,16 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import yaml from "js-yaml";
-import type { Docs2aiConfig, SourceConfig } from "./schema";
+import type { DocmunchConfig, SourceConfig } from "./schema";
 
-const CONFIG_FILENAME = ".docs2ai.yaml";
+const CONFIG_FILENAME = ".docmunch.yaml";
 
 /**
- * Load the .docs2ai.yaml config file, searching up from cwd.
+ * Load the .docmunch.yaml config file, searching up from cwd.
  * Returns null if no config file is found.
  */
 export function loadConfig(startDir?: string): {
-  config: Docs2aiConfig;
+  config: DocmunchConfig;
   configPath: string;
 } | null {
   const configPath = findConfigFile(startDir || process.cwd());
@@ -19,7 +19,7 @@ export function loadConfig(startDir?: string): {
   const raw = readFileSync(configPath, "utf-8");
   const data = yaml.load(raw) as Record<string, any>;
 
-  const config: Docs2aiConfig = {
+  const config: DocmunchConfig = {
     version: data.version ?? 1,
     outputDir: data.output_dir ?? ".ai/docs",
     sources: (data.sources ?? []).map(snakeToCamelSource),
@@ -29,9 +29,9 @@ export function loadConfig(startDir?: string): {
 }
 
 /**
- * Save configuration to a .docs2ai.yaml file.
+ * Save configuration to a .docmunch.yaml file.
  */
-export function saveConfig(config: Docs2aiConfig, configPath: string): void {
+export function saveConfig(config: DocmunchConfig, configPath: string): void {
   const data = {
     version: config.version,
     output_dir: config.outputDir,
@@ -45,7 +45,7 @@ export function saveConfig(config: Docs2aiConfig, configPath: string): void {
 /**
  * Add or update a source in the config (upsert by name).
  */
-export function addSource(config: Docs2aiConfig, source: SourceConfig): void {
+export function addSource(config: DocmunchConfig, source: SourceConfig): void {
   const idx = config.sources.findIndex((s) => s.name === source.name);
   if (idx >= 0) {
     config.sources[idx] = source;
@@ -55,7 +55,7 @@ export function addSource(config: Docs2aiConfig, source: SourceConfig): void {
 }
 
 /**
- * Walk up the directory tree looking for .docs2ai.yaml.
+ * Walk up the directory tree looking for .docmunch.yaml.
  */
 function findConfigFile(startDir: string): string | null {
   let dir = startDir;
