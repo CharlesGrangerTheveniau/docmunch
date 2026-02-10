@@ -1,7 +1,12 @@
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, readFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import matter from "gray-matter";
 import { filePathForPage } from "../utils/slug";
+
+/** Strip the fetched_at line so two outputs can be compared ignoring timestamp. */
+function stripTimestamp(content: string): string {
+  return content.replace(/^fetched_at:.*$/m, "");
+}
 
 export interface WriterOptions {
   sourceUrl: string;
@@ -11,12 +16,13 @@ export interface WriterOptions {
 
 /**
  * Write Markdown with frontmatter to a file or stdout.
+ * Returns true if the file was actually written (content changed), false if skipped.
  */
 export function write(
   markdown: string,
   outputPath: string | undefined,
   options: WriterOptions
-): void {
+): boolean {
   const content = matter.stringify(markdown, {
     source: options.sourceUrl,
     fetched_at: new Date().toISOString(),
@@ -26,21 +32,32 @@ export function write(
   });
 
   if (outputPath) {
+    if (existsSync(outputPath)) {
+      try {
+        const existing = readFileSync(outputPath, "utf-8");
+        if (stripTimestamp(existing) === stripTimestamp(content)) return false;
+      } catch {
+        // Can't read existing, write anyway
+      }
+    }
     mkdirSync(dirname(outputPath), { recursive: true });
     writeFileSync(outputPath, content, "utf-8");
+    return true;
   } else {
     process.stdout.write(content);
+    return true;
   }
 }
 
 /**
- * Write a single page's Markdown with frontmatter to a file path (always writes to disk).
+ * Write a single page's Markdown with frontmatter to a file path.
+ * Returns true if the file was actually written (content changed), false if skipped.
  */
 export function writePage(
   markdown: string,
   filePath: string,
   options: WriterOptions
-): void {
+): boolean {
   const content = matter.stringify(markdown, {
     source: options.sourceUrl,
     fetched_at: new Date().toISOString(),
@@ -49,8 +66,18 @@ export function writePage(
     docmunch_version: "0.2.0",
   });
 
+  if (existsSync(filePath)) {
+    try {
+      const existing = readFileSync(filePath, "utf-8");
+      if (stripTimestamp(existing) === stripTimestamp(content)) return false;
+    } catch {
+      // Can't read existing, write anyway
+    }
+  }
+
   mkdirSync(dirname(filePath), { recursive: true });
   writeFileSync(filePath, content, "utf-8");
+  return true;
 }
 
 export interface PageEntry {
@@ -60,17 +87,24 @@ export interface PageEntry {
   markdown: string;
 }
 
+export interface WritePagesResult {
+  entries: { title: string; path: string }[];
+  written: number;
+}
+
 /**
  * Write multiple crawled pages to a directory, one .md file per page.
- * Returns manifest page entries (title + relative path) for each written page.
+ * Skips files whose content hasn't changed (ignoring fetched_at).
+ * Returns manifest page entries and the number of files actually written.
  */
 export function writePages(
   pages: PageEntry[],
   outputDir: string,
   basePrefix: string
-): { title: string; path: string }[] {
+): WritePagesResult {
   const usedPaths = new Set<string>();
   const entries: { title: string; path: string }[] = [];
+  let written = 0;
 
   for (const page of pages) {
     let relPath = filePathForPage(page.url, basePrefix);
@@ -85,14 +119,15 @@ export function writePages(
     usedPaths.add(relPath);
 
     const filePath = join(outputDir, relPath);
-    writePage(page.markdown, filePath, {
+    const didWrite = writePage(page.markdown, filePath, {
       sourceUrl: page.url,
       title: page.title,
       platform: page.platform,
     });
+    if (didWrite) written++;
 
     entries.push({ title: page.title, path: relPath });
   }
 
-  return entries;
+  return { entries, written };
 }

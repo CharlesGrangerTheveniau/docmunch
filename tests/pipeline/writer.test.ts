@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { write, writePage, writePages } from "../../src/pipeline/writer";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
 
 vi.mock("node:fs", () => ({
   writeFileSync: vi.fn(),
   mkdirSync: vi.fn(),
+  existsSync: vi.fn(() => false),
+  readFileSync: vi.fn(),
 }));
 
 beforeEach(() => {
@@ -57,6 +59,22 @@ describe("write", () => {
     const output = stdoutSpy.mock.calls[0][0] as string;
     expect(output).toContain("fetched_at:");
   });
+
+  it("skips write when content is unchanged", () => {
+    (existsSync as any).mockReturnValue(true);
+    (readFileSync as any).mockReturnValue(
+      "---\nsource: 'https://example.com'\nfetched_at: '2025-01-01T00:00:00.000Z'\nplatform: generic\ntitle: Test\ndocmunch_version: 0.2.0\n---\n# Test\n"
+    );
+
+    const result = write("# Test", "/tmp/test.md", {
+      sourceUrl: "https://example.com",
+      title: "Test",
+      platform: "generic",
+    });
+
+    expect(result).toBe(false);
+    expect(writeFileSync).not.toHaveBeenCalled();
+  });
 });
 
 describe("writePage", () => {
@@ -93,14 +111,13 @@ describe("writePages", () => {
       },
     ];
 
-    const entries = writePages(pages, "/out/example", "/docs/");
+    const { entries, written } = writePages(pages, "/out/example", "/docs/");
 
     expect(entries).toEqual([
       { title: "Intro", path: "intro.md" },
       { title: "Auth Guide", path: "guides/auth.md" },
     ]);
-
-    // Two writePage calls → two writeFileSync calls
+    expect(written).toBe(2);
     expect(writeFileSync).toHaveBeenCalledTimes(2);
   });
 
@@ -120,7 +137,7 @@ describe("writePages", () => {
       },
     ];
 
-    const entries = writePages(pages, "/out", "/docs/");
+    const { entries } = writePages(pages, "/out", "/docs/");
 
     expect(entries[0].path).toBe("intro.md");
     expect(entries[1].path).toBe("intro-2.md");
@@ -136,7 +153,7 @@ describe("writePages", () => {
       },
     ];
 
-    const entries = writePages(pages, "/out", "/docs/");
+    const { entries } = writePages(pages, "/out", "/docs/");
     expect(entries[0].path).toBe("index.md");
   });
 });

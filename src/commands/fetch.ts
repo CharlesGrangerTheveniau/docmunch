@@ -117,25 +117,30 @@ export const fetchCommand = defineCommand({
         });
 
         const firstPlatform = pageEntries[0]?.platform || "generic";
-        const manifestPages = writePages(pageEntries, outputDir, effectivePrefix);
+        const { entries: manifestPages, written } = writePages(pageEntries, outputDir, effectivePrefix);
 
-        const siteMeta = extractSiteMeta(firstHtml, url);
-        const sourceManifest = buildSourceManifest(name, url, firstPlatform, manifestPages, siteMeta);
-        writeSourceManifest(sourceManifest, outputDir);
+        if (written > 0) {
+          const siteMeta = extractSiteMeta(firstHtml, url);
+          const sourceManifest = buildSourceManifest(name, url, firstPlatform, manifestPages, siteMeta);
+          writeSourceManifest(sourceManifest, outputDir);
 
-        // Update root manifest in the parent directory
-        const rootDir = dirname(outputDir.replace(/\/$/, ""));
-        updateRootManifest(rootDir, {
-          name,
-          path: name + "/",
-          fetched_at: sourceManifest.fetched_at,
-          display_name: siteMeta.displayName,
-          description: siteMeta.description,
-          icon_url: siteMeta.iconUrl,
-          page_count: manifestPages.length,
-        });
+          // Update root manifest in the parent directory
+          const rootDir = dirname(outputDir.replace(/\/$/, ""));
+          updateRootManifest(rootDir, {
+            name,
+            path: name + "/",
+            fetched_at: sourceManifest.fetched_at,
+            display_name: siteMeta.displayName,
+            description: siteMeta.description,
+            icon_url: siteMeta.iconUrl,
+            page_count: manifestPages.length,
+          });
+        }
 
-        consola.success(`Written ${pages.length} pages to ${outputDir}`);
+        const unchanged = pages.length - written;
+        const parts = [`Written ${written} pages to ${outputDir}`];
+        if (unchanged > 0) parts.push(`(${unchanged} unchanged)`);
+        consola.success(parts.join(" "));
       } else {
         // Single-file mode: stitch all pages together
         const sections: string[] = [];
