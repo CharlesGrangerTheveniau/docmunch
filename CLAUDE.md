@@ -13,7 +13,7 @@ URL → Resolver → Fetcher → Extractor → Transformer → Writer
 ```
 
 - **Resolver**: Detects the doc platform (Mintlify, Docusaurus, GitBook, ReadMe, Swagger, generic) from URL patterns, HTML meta tags, or DOM structure. Returns a platform identifier that downstream stages use to select strategies.
-- **Fetcher**: Retrieves the raw HTML. Two modes: fast path (native `fetch`/`ofetch` for static/SSR sites) and heavy path (Playwright for JS-rendered SPAs). Handles crawl mode (following sidebar links, respecting crawl depth). Rate limiting and politeness logic lives here.
+- **Fetcher**: Retrieves the raw HTML. Three-tier fallback: (1) fast static fetch via `ofetch`, (2) headless Playwright if static fetch fails (403/406/429), (3) visible (non-headless) Playwright if bot protection challenge is detected (Cloudflare, etc.). Playwright is auto-installed on first need. Rate limiting and politeness logic lives here.
 - **Extractor**: Pulls meaningful content from raw HTML. Uses platform-specific selectors first (e.g. known content containers for Mintlify, Docusaurus), falls back to `@mozilla/readability` for generic extraction. Uses `cheerio` for DOM querying. Strips navbars, footers, cookie banners, sidebars.
 - **Transformer**: Converts clean HTML to Markdown via `Turndown` + `turndown-plugin-gfm`. Custom rules handle code blocks, callouts/admonitions, tabbed content, and tables. Code block preservation (language tags, indentation) is critical — never break code examples.
 - **Writer**: Outputs Markdown with YAML frontmatter (source URL, fetch date, platform, title). Two output modes for crawl: single-file (all pages stitched with `---` separators) or directory (one `.md` per page with `_index.json` source manifest and `manifest.json` root manifest). Manages the `.docs2ai.yaml` config file for multi-source projects.
@@ -261,7 +261,7 @@ if (crawl && -o doesn't end with .md)→ directory at -o path
 ## Design Principles
 
 1. **Code blocks are sacred.** Never break, reformat, or lose code examples during extraction. Language tags and indentation must survive perfectly. Test this aggressively.
-2. **Playwright is optional.** The core static fetch path must work without Playwright installed. Detect its absence gracefully and prompt the user to install it only when needed for JS-rendered sites.
+2. **Playwright is auto-installed.** The core static fetch path works without Playwright. When a site blocks static fetch (403, Cloudflare), the fetcher auto-installs Playwright globally on first need and retries with a browser. No manual setup required.
 3. **Platform strategies are pluggable.** Adding support for a new doc platform should mean adding one file in `src/platforms/` that implements the base interface. No changes to the pipeline.
 4. **Sensible defaults, full control.** The tool should work great with zero config (`docs2ai <url>`), but power users can control crawl depth, output paths, and more.
 5. **Deterministic and testable.** Use saved HTML fixtures for tests so they don't depend on live sites. The pipeline is pure functions where possible (input HTML → output Markdown).
@@ -311,3 +311,34 @@ NOT in scope for v0.1:
 - When crawling, avoid infinite loops from circular links. Track visited URLs.
 - When stitching multi-page crawls into one file (single-file mode), add clear `## Page: <title>` separators and deduplicate repeated headers/footers. Directory mode avoids this problem by writing one file per page.
 - **MCP server + stdout**: The MCP stdio transport uses stdout for JSON-RPC messages. Any non-JSON-RPC output on stdout (e.g. `console.log`, consola, debug prints) will break the protocol and cause cryptic connection failures. Code in `src/mcp/` and `src/commands/serve.ts` must never write to stdout. Use `console.error()` or `process.stderr.write()` if you need debug output. The dynamic imports in `serve.ts` exist specifically to prevent consola from being loaded.
+
+## Fetcher Fallback Chain
+
+The fetcher (`src/pipeline/fetcher.ts`) uses a three-tier strategy:
+
+1. **Static fetch** (`ofetch`) — fast, no dependencies. Works for most doc sites.
+2. **Headless Playwright** — triggered on HTTP 403, 406, or 429. Handles JS-rendered SPAs.
+3. **Visible Playwright** (`headless: false`) — triggered when headless returns a bot-protection challenge page (Cloudflare "Verify you are human", etc.). A browser window briefly opens and closes.
+
+Challenge detection uses pattern matching on the response HTML (`isChallengeContent`). Patterns: "verify you are human", "just a moment", "checking your browser", etc.
+
+Playwright is auto-installed globally (`npm install -g playwright && npx playwright install chromium`) on first need. If auto-install fails, a clear error message tells the user what to run manually.
+
+**Build note**: `playwright` is marked as `external` in `tsup.config.ts` to prevent bundling. It's loaded via dynamic `import("playwright")`.
+
+## Crawl Boundary Logic
+
+The crawler (`src/crawl/crawler.ts`) determines which URLs to follow using a path prefix:
+
+1. `getCrawlPrefix(startUrl)` extracts the initial prefix by removing the last path segment (e.g. `https://example.com/api/docs/intro` → prefix `/api/docs/`).
+2. **Boundary widening** (only for known platforms): When a platform strategy provides a `navLinkSelector`, the crawler collects all same-origin nav links on the first page and computes their common path prefix via `computeCommonPrefix`. This widens the boundary to cover the full doc tree.
+3. **Generic sites never widen.** The generic strategy has `navLinkSelector: null`. Even though it provides `discoverUrls` (heuristic sidebar detection), this is only used for link discovery — links are filtered against the tight URL prefix from step 1. This prevents non-doc links (site nav, footer links) from expanding the crawl scope.
+4. **Generic sidebar detection** (`discoverUrls` in `src/platforms/generic.ts`): Tries sidebar-specific CSS selectors (`aside a`, `[class*="sidebar"] a`, etc.) to find doc navigation links. Returns empty if no sidebar-like structure is found — the crawler then only follows links matching the URL prefix.
+
+### Graceful interruption
+
+Pressing Ctrl+C during a crawl stops the BFS loop and prompts the user to save or discard pages collected so far. A second Ctrl+C force-exits.
+
+## Error Handling
+
+`cli.ts` registers global `uncaughtException` and `unhandledRejection` handlers to format errors nicely via consola instead of showing raw stack traces. The `ERR_PLAYWRIGHT_NOT_INSTALLED` error code gets a user-friendly message.

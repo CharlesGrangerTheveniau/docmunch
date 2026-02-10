@@ -35,10 +35,11 @@ docs2ai list              # show configured sources
 
 - **Platform detection** — auto-detects Mintlify, Docusaurus, GitBook, ReadMe, and falls back to Readability for generic sites
 - **Code block preservation** — language tags and indentation survive extraction perfectly
-- **Crawl mode** — follows sidebar/nav links with configurable depth
+- **Crawl mode** — follows sidebar/nav links with configurable depth, scoped to the documentation path
+- **Smart fetching** — static fetch by default, auto-retries with Playwright for blocked sites (403, Cloudflare). Playwright is auto-installed on first need
+- **Graceful interruption** — press Ctrl+C during a crawl to stop and choose whether to save pages collected so far
 - **YAML frontmatter** — each output includes source URL, fetch date, platform, and title
 - **Config file** — manage multiple doc sources with `.docs2ai.yaml`
-- **Playwright optional** — uses fast static fetch by default, Playwright only when needed for JS-rendered pages
 - **MCP server** — expose fetched docs to AI tools (Claude Code, Cursor) via Model Context Protocol
 
 ## MCP Server
