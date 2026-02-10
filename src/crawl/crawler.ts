@@ -57,13 +57,18 @@ export async function crawl(
     options.onPageFetched?.(url, results.length, results.length + queue.length);
 
     if (depth < options.maxDepth) {
-      // On the first page, discover all same-origin nav links to widen the boundary
+      // On the first page, widen the boundary using nav links (only when a
+      // platform-specific navLinkSelector or custom discovery is available —
+      // generic sites use all <a> tags which would collapse the prefix to "/")
       if (isFirstPage) {
-        const allNavUrls = options.discoverUrls
-          ? discoverSameOriginCustom(html, url, origin, options.discoverUrls)
-          : discoverSameOrigin(html, url, origin, options.navLinkSelector);
-        if (allNavUrls.length > 0) {
-          pathPrefix = computeCommonPrefix(startUrl, allNavUrls);
+        const hasNavScope = !!options.navLinkSelector || !!options.discoverUrls;
+        if (hasNavScope) {
+          const allNavUrls = options.discoverUrls
+            ? discoverSameOriginCustom(html, url, origin, options.discoverUrls)
+            : discoverSameOrigin(html, url, origin, options.navLinkSelector);
+          if (allNavUrls.length > 0) {
+            pathPrefix = computeCommonPrefix(startUrl, allNavUrls);
+          }
         }
         isFirstPage = false;
       }

@@ -26,4 +26,78 @@ describe("generic platform strategy", () => {
     expect(selectors).toContain("script");
     expect(selectors).toContain("style");
   });
+
+  describe("discoverUrls", () => {
+    const base = "https://example.com/docs/intro";
+
+    it("finds links in aside elements", () => {
+      const html = `<html><body>
+        <aside>
+          <a href="/docs/intro">Intro</a>
+          <a href="/docs/setup">Setup</a>
+          <a href="/docs/api">API</a>
+        </aside>
+        <main><p>Content</p></main>
+      </body></html>`;
+      const urls = generic.discoverUrls!(html, base);
+      expect(urls).toHaveLength(3);
+      expect(urls).toContain("https://example.com/docs/intro");
+      expect(urls).toContain("https://example.com/docs/setup");
+      expect(urls).toContain("https://example.com/docs/api");
+    });
+
+    it("finds links in sidebar class elements", () => {
+      const html = `<html><body>
+        <div class="sidebar-nav">
+          <a href="/docs/a">A</a>
+          <a href="/docs/b">B</a>
+          <a href="/docs/c">C</a>
+          <a href="/docs/d">D</a>
+        </div>
+        <main><p>Content</p></main>
+      </body></html>`;
+      const urls = generic.discoverUrls!(html, base);
+      expect(urls).toHaveLength(4);
+    });
+
+    it("picks largest nav element as fallback", () => {
+      const html = `<html><body>
+        <nav><a href="/about">About</a><a href="/pricing">Pricing</a></nav>
+        <nav>
+          <a href="/docs/a">A</a>
+          <a href="/docs/b">B</a>
+          <a href="/docs/c">C</a>
+          <a href="/docs/d">D</a>
+          <a href="/docs/e">E</a>
+        </nav>
+        <main><p>Content</p></main>
+      </body></html>`;
+      const urls = generic.discoverUrls!(html, base);
+      expect(urls).toHaveLength(5);
+      expect(urls[0]).toContain("/docs/");
+    });
+
+    it("returns empty when no sidebar found", () => {
+      const html = `<html><body>
+        <nav><a href="/about">About</a></nav>
+        <main><p>Content</p></main>
+      </body></html>`;
+      const urls = generic.discoverUrls!(html, base);
+      expect(urls).toHaveLength(0);
+    });
+
+    it("skips hash-only and mailto links", () => {
+      const html = `<html><body>
+        <aside>
+          <a href="#section">Jump</a>
+          <a href="mailto:hi@example.com">Email</a>
+          <a href="/docs/a">A</a>
+          <a href="/docs/b">B</a>
+          <a href="/docs/c">C</a>
+        </aside>
+      </body></html>`;
+      const urls = generic.discoverUrls!(html, base);
+      expect(urls).toHaveLength(3);
+    });
+  });
 });
