@@ -1,6 +1,6 @@
 {
   "name": "docmunch",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Convert online documentation into AI-ready Markdown context files",
   "type": "module",
   "bin": {
