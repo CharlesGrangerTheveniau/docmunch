@@ -13,7 +13,7 @@ export const mintlify: PlatformStrategy = {
   },
 
   contentSelector(): string {
-    return "article, main";
+    return "#content-area, article, main";
   },
 
   removeSelectors(): string[] {
@@ -22,10 +22,21 @@ export const mintlify: PlatformStrategy = {
       "header",
       "footer",
       "[role='navigation']",
+      "[role='tablist']",
       ".sidebar",
       "[class*='sidebar']",
       "[class*='cookie']",
       "[class*='banner']",
+      "[class*='feedback']",
+      "[class*='copy-button']",
+      "[class*='clipboard']",
+      "[class*='chat-assistant']",
+      "[class*='floating-input']",
+      "a[class*='opacity-0']",
+      "details.expandable",
+      "#pagination",
+      "div[class*='absolute'][class*='whitespace-nowrap']",
+      "button",
       "script",
       "style",
     ];
