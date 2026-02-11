@@ -59,11 +59,14 @@ export const mintlify: PlatformStrategy = {
     // Raw paths in __next_f are app-relative (e.g. /welcome, /endpoints/...).
     // When the app is mounted at a subpath (e.g. /docs/rest-api/reference),
     // we find the prefix by matching a raw path to the end of the start URL.
+    // Use the SHORTEST candidate — the longest app-relative path reveals the
+    // true mount point. Picking the longest candidate risks including app
+    // routing segments (e.g. /api-reference) in the prefix, causing duplication.
     let mountPrefix = "";
     for (const p of paths) {
       if (pathname !== p && pathname.endsWith(p)) {
         const candidate = pathname.slice(0, pathname.length - p.length);
-        if (candidate.length > mountPrefix.length) {
+        if (!mountPrefix || candidate.length < mountPrefix.length) {
           mountPrefix = candidate;
         }
       }
