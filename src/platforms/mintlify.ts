@@ -13,7 +13,7 @@ export const mintlify: PlatformStrategy = {
   },
 
   contentSelector(): string {
-    return "article, main";
+    return "#content-area, article, main";
   },
 
   removeSelectors(): string[] {
@@ -22,10 +22,21 @@ export const mintlify: PlatformStrategy = {
       "header",
       "footer",
       "[role='navigation']",
+      "[role='tablist']",
       ".sidebar",
       "[class*='sidebar']",
       "[class*='cookie']",
       "[class*='banner']",
+      "[class*='feedback']",
+      "[class*='copy-button']",
+      "[class*='clipboard']",
+      "[class*='chat-assistant']",
+      "[class*='floating-input']",
+      "a[class*='opacity-0']",
+      "details.expandable",
+      "#pagination",
+      "div[class*='absolute'][class*='whitespace-nowrap']",
+      "button",
       "script",
       "style",
     ];
@@ -59,11 +70,14 @@ export const mintlify: PlatformStrategy = {
     // Raw paths in __next_f are app-relative (e.g. /welcome, /endpoints/...).
     // When the app is mounted at a subpath (e.g. /docs/rest-api/reference),
     // we find the prefix by matching a raw path to the end of the start URL.
+    // Use the SHORTEST candidate — the longest app-relative path reveals the
+    // true mount point. Picking the longest candidate risks including app
+    // routing segments (e.g. /api-reference) in the prefix, causing duplication.
     let mountPrefix = "";
     for (const p of paths) {
       if (pathname !== p && pathname.endsWith(p)) {
         const candidate = pathname.slice(0, pathname.length - p.length);
-        if (candidate.length > mountPrefix.length) {
+        if (!mountPrefix || candidate.length < mountPrefix.length) {
           mountPrefix = candidate;
         }
       }

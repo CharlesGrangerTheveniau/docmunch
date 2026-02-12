@@ -75,6 +75,11 @@ export const fetchCommand = defineCommand({
       description: "Maximum crawl depth",
       default: "2",
     },
+    force: {
+      type: "boolean",
+      description: "Force rewrite all files, even if content is unchanged",
+      default: false,
+    },
   },
   async run({ args }) {
     const url = args.url as string;
@@ -82,6 +87,7 @@ export const fetchCommand = defineCommand({
     const shouldCrawl = args.crawl as boolean;
     const maxDepth = parseInt(args["max-depth"] as string, 10);
     const name = (args.name as string) || slugFromUrl(url);
+    const force = args.force as boolean;
 
     const { mode, outputPath, outputDir } = resolveOutputMode(output, shouldCrawl, name);
     const silent = mode === "single-file" && !outputPath;
@@ -117,25 +123,30 @@ export const fetchCommand = defineCommand({
         });
 
         const firstPlatform = pageEntries[0]?.platform || "generic";
-        const manifestPages = writePages(pageEntries, outputDir, effectivePrefix);
+        const { entries: manifestPages, written } = writePages(pageEntries, outputDir, effectivePrefix, { force });
 
-        const siteMeta = extractSiteMeta(firstHtml, url);
-        const sourceManifest = buildSourceManifest(name, url, firstPlatform, manifestPages, siteMeta);
-        writeSourceManifest(sourceManifest, outputDir);
+        if (written > 0 || force) {
+          const siteMeta = extractSiteMeta(firstHtml, url);
+          const sourceManifest = buildSourceManifest(name, url, firstPlatform, manifestPages, siteMeta);
+          writeSourceManifest(sourceManifest, outputDir);
 
-        // Update root manifest in the parent directory
-        const rootDir = dirname(outputDir.replace(/\/$/, ""));
-        updateRootManifest(rootDir, {
-          name,
-          path: name + "/",
-          fetched_at: sourceManifest.fetched_at,
-          display_name: siteMeta.displayName,
-          description: siteMeta.description,
-          icon_url: siteMeta.iconUrl,
-          page_count: manifestPages.length,
-        });
+          // Update root manifest in the parent directory
+          const rootDir = dirname(outputDir.replace(/\/$/, ""));
+          updateRootManifest(rootDir, {
+            name,
+            path: name + "/",
+            fetched_at: sourceManifest.fetched_at,
+            display_name: siteMeta.displayName,
+            description: siteMeta.description,
+            icon_url: siteMeta.iconUrl,
+            page_count: manifestPages.length,
+          });
+        }
 
-        consola.success(`Written ${pages.length} pages to ${outputDir}`);
+        const unchanged = pages.length - written;
+        const parts = [`Written ${written} pages to ${outputDir}`];
+        if (unchanged > 0) parts.push(`(${unchanged} unchanged)`);
+        consola.success(parts.join(" "));
       } else {
         // Single-file mode: stitch all pages together
         const sections: string[] = [];
@@ -158,6 +169,7 @@ export const fetchCommand = defineCommand({
           sourceUrl: url,
           title: firstTitle,
           platform: firstPlatform,
+          force,
         });
 
         if (!silent) consola.success(`Written to ${outputPath}`);
@@ -179,6 +191,7 @@ export const fetchCommand = defineCommand({
             sourceUrl: url,
             title: result.title || title,
             platform: result.platform,
+            force,
           });
           if (!silent) consola.success(`Written to ${outputPath}`);
           return;
@@ -201,6 +214,7 @@ export const fetchCommand = defineCommand({
         sourceUrl: url,
         title,
         platform,
+        force,
       });
 
       if (!silent) consola.success(`Written to ${outputPath}`);

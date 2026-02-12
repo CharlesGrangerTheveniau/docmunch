@@ -28,6 +28,11 @@ export const updateCommand = defineCommand({
       type: "string",
       description: "Update only the named source",
     },
+    force: {
+      type: "boolean",
+      description: "Force rewrite all files, even if content is unchanged",
+      default: false,
+    },
   },
   async run({ args }) {
     const result = loadConfig();
@@ -39,6 +44,7 @@ export const updateCommand = defineCommand({
     const { config, configPath } = result;
     const configDir = dirname(configPath);
     const filterName = args.name as string | undefined;
+    const force = args.force as boolean;
 
     const sources = filterName
       ? config.sources.filter((s) => s.name === filterName)
@@ -86,30 +92,35 @@ export const updateCommand = defineCommand({
           });
 
           const firstPlatform = pageEntries[0]?.platform || "generic";
-          const manifestPages = writePages(pageEntries, outputDir, effectivePrefix);
+          const { entries: manifestPages, written } = writePages(pageEntries, outputDir, effectivePrefix, { force });
 
-          const siteMeta = extractSiteMeta(firstHtml, source.url);
-          const sourceManifest = buildSourceManifest(
-            source.name,
-            source.url,
-            firstPlatform,
-            manifestPages,
-            siteMeta
-          );
-          writeSourceManifest(sourceManifest, outputDir);
+          if (written > 0 || force) {
+            const siteMeta = extractSiteMeta(firstHtml, source.url);
+            const sourceManifest = buildSourceManifest(
+              source.name,
+              source.url,
+              firstPlatform,
+              manifestPages,
+              siteMeta
+            );
+            writeSourceManifest(sourceManifest, outputDir);
 
-          const rootDir = join(configDir, config.outputDir);
-          updateRootManifest(rootDir, {
-            name: source.name,
-            path: source.output,
-            fetched_at: sourceManifest.fetched_at,
-            display_name: siteMeta.displayName,
-            description: siteMeta.description,
-            icon_url: siteMeta.iconUrl,
-            page_count: manifestPages.length,
-          });
+            const rootDir = join(configDir, config.outputDir);
+            updateRootManifest(rootDir, {
+              name: source.name,
+              path: source.output,
+              fetched_at: sourceManifest.fetched_at,
+              display_name: siteMeta.displayName,
+              description: siteMeta.description,
+              icon_url: siteMeta.iconUrl,
+              page_count: manifestPages.length,
+            });
+          }
 
-          consola.success(`Updated "${source.name}" → ${outputDir} (${pages.length} pages)`);
+          const unchanged = pages.length - written;
+          const parts = [`Updated "${source.name}" → ${outputDir} (${written} written)`];
+          if (unchanged > 0) parts.push(`(${unchanged} unchanged)`);
+          consola.success(parts.join(" "));
         } else {
           // Single-file mode: stitch all pages together
           const outputPath = join(configDir, config.outputDir, source.output);
@@ -134,6 +145,7 @@ export const updateCommand = defineCommand({
             sourceUrl: source.url,
             title: firstTitle,
             platform: firstPlatform,
+            force,
           });
 
           consola.success(`Updated "${source.name}" → ${outputPath}`);
@@ -149,6 +161,7 @@ export const updateCommand = defineCommand({
           sourceUrl: source.url,
           title,
           platform,
+          force,
         });
 
         consola.success(`Updated "${source.name}" → ${outputPath}`);

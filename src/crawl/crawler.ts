@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import * as readline from "node:readline";
-import { fetchPage, fetchWithBrowser } from "../pipeline/fetcher";
+import { fetchPage } from "../pipeline/fetcher";
 import {
   getCrawlPrefix,
   computeCommonPrefix,
@@ -111,19 +111,11 @@ export async function crawl(
           ? discoverLinksCustom(html, url, origin, pathPrefix, options.discoverUrls)
           : discoverLinks(html, url, origin, pathPrefix, options.navLinkSelector);
 
-        // If the first page yielded no in-bounds links, the static HTML may
-        // contain wrong origins (e.g. Vercel deploy URLs in an SPA).
-        // Re-fetch with a real browser to get JS-rendered links.
-        if (results.length === 1 && links.length === 0) {
-          try {
-            const browserHtml = await fetchWithBrowser(url);
-            results[0] = { url, html: browserHtml };
-            links = options.discoverUrls
-              ? discoverLinksCustom(browserHtml, url, origin, pathPrefix, options.discoverUrls)
-              : discoverLinks(browserHtml, url, origin, pathPrefix, options.navLinkSelector);
-          } catch {
-            // Browser fetch failed, continue with static HTML
-          }
+        // If custom discovery found nothing (e.g. no sidebar detected), fall
+        // back to scanning all <a> tags. Origin remapping in discoverLinks
+        // handles deploy URLs (Vercel, Netlify) pointing to a different origin.
+        if (links.length === 0 && options.discoverUrls) {
+          links = discoverLinks(html, url, origin, pathPrefix);
         }
 
         for (const link of links) {
@@ -150,6 +142,8 @@ export async function crawl(
 /**
  * Extract all in-bounds links from a page's HTML.
  * When navLinkSelector is provided, only links matching that selector are used.
+ * Falls back to origin remapping when links match the path prefix but have a
+ * foreign origin (e.g. Vercel/Netlify deploy URLs).
  */
 function discoverLinks(
   html: string,
@@ -159,7 +153,8 @@ function discoverLinks(
   navLinkSelector?: string | null
 ): string[] {
   const $ = cheerio.load(html);
-  const links: string[] = [];
+  const inBound: string[] = [];
+  const foreignPathMatches: string[] = [];
   const selector = navLinkSelector || "a[href]";
 
   $(selector).each((_, el) => {
@@ -167,21 +162,27 @@ function discoverLinks(
     if (!href) return;
 
     try {
-      const resolved = new URL(href, baseUrl).href;
-      if (isInBounds(resolved, origin, pathPrefix)) {
-        links.push(resolved);
+      const resolved = new URL(href, baseUrl);
+      if (isInBounds(resolved.href, origin, pathPrefix)) {
+        inBound.push(resolved.href);
+      } else if (resolved.pathname.startsWith(pathPrefix)) {
+        foreignPathMatches.push(
+          origin + resolved.pathname + resolved.search + resolved.hash
+        );
       }
     } catch {
       // Invalid URL, skip
     }
   });
 
-  return [...new Set(links)];
+  const result = inBound.length > 0 ? inBound : foreignPathMatches;
+  return [...new Set(result)];
 }
 
 /**
  * Discover all same-origin links from nav (no path prefix filter).
  * Used on the first page to compute the crawl boundary from nav structure.
+ * Remaps foreign-origin links that share the crawl path prefix.
  */
 function discoverSameOrigin(
   html: string,
@@ -190,27 +191,35 @@ function discoverSameOrigin(
   navLinkSelector?: string | null
 ): string[] {
   const $ = cheerio.load(html);
-  const links: string[] = [];
+  const sameOrigin: string[] = [];
+  const foreign: string[] = [];
   const selector = navLinkSelector || "a[href]";
+  const { pathPrefix } = getCrawlPrefix(baseUrl);
 
   $(selector).each((_, el) => {
     const href = $(el).attr("href");
     if (!href) return;
     try {
-      const resolved = new URL(href, baseUrl).href;
-      if (new URL(resolved).origin === origin) {
-        links.push(resolved);
+      const resolved = new URL(href, baseUrl);
+      if (resolved.origin === origin) {
+        sameOrigin.push(resolved.href);
+      } else if (resolved.pathname.startsWith(pathPrefix)) {
+        foreign.push(
+          origin + resolved.pathname + resolved.search + resolved.hash
+        );
       }
     } catch {
       // Invalid URL, skip
     }
   });
 
-  return [...new Set(links)];
+  const result = sameOrigin.length > 0 ? sameOrigin : foreign;
+  return [...new Set(result)];
 }
 
 /**
  * Discover all same-origin links via custom discovery (no path prefix filter).
+ * Remaps foreign-origin links that share the crawl path prefix.
  */
 function discoverSameOriginCustom(
   html: string,
@@ -219,21 +228,33 @@ function discoverSameOriginCustom(
   discoverUrls: (html: string, baseUrl: string) => string[]
 ): string[] {
   const urls = discoverUrls(html, baseUrl);
-  return [
-    ...new Set(
-      urls.filter((u) => {
-        try {
-          return new URL(u).origin === origin;
-        } catch {
-          return false;
-        }
-      })
-    ),
-  ];
+  const { pathPrefix } = getCrawlPrefix(baseUrl);
+  const sameOrigin: string[] = [];
+  const foreign: string[] = [];
+
+  for (const u of urls) {
+    try {
+      const parsed = new URL(u);
+      if (parsed.origin === origin) {
+        sameOrigin.push(u);
+      } else if (parsed.pathname.startsWith(pathPrefix)) {
+        foreign.push(
+          origin + parsed.pathname + parsed.search + parsed.hash
+        );
+      }
+    } catch {
+      // skip
+    }
+  }
+
+  const result = sameOrigin.length > 0 ? sameOrigin : foreign;
+  return [...new Set(result)];
 }
 
 /**
  * Extract in-bounds links using a custom discovery function from the platform strategy.
+ * Falls back to origin remapping when links match the path prefix but have a
+ * foreign origin (e.g. Vercel/Netlify deploy URLs).
  */
 function discoverLinksCustom(
   html: string,
@@ -243,7 +264,24 @@ function discoverLinksCustom(
   discoverUrls: (html: string, baseUrl: string) => string[]
 ): string[] {
   const urls = discoverUrls(html, baseUrl);
-  return [...new Set(urls.filter((u) => isInBounds(u, origin, pathPrefix)))];
+  const inBound = urls.filter((u) => isInBounds(u, origin, pathPrefix));
+  if (inBound.length > 0) return [...new Set(inBound)];
+
+  // Remap foreign-origin links that match the expected path structure
+  const remapped: string[] = [];
+  for (const u of urls) {
+    try {
+      const parsed = new URL(u);
+      if (parsed.pathname.startsWith(pathPrefix)) {
+        remapped.push(
+          origin + parsed.pathname + parsed.search + parsed.hash
+        );
+      }
+    } catch {
+      // skip
+    }
+  }
+  return [...new Set(remapped)];
 }
 
 function delay(ms: number): Promise<void> {

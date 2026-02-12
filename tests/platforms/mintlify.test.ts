@@ -20,7 +20,7 @@ describe("mintlify platform strategy", () => {
   });
 
   it("returns correct content selector", () => {
-    expect(mintlify.contentSelector()).toBe("article, main");
+    expect(mintlify.contentSelector()).toBe("#content-area, article, main");
   });
 
   it("returns remove selectors including nav and footer", () => {
