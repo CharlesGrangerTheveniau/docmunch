@@ -114,6 +114,7 @@ export const updateCommand = defineCommand({
               description: siteMeta.description,
               icon_url: siteMeta.iconUrl,
               page_count: manifestPages.length,
+              total_tokens: sourceManifest.total_tokens,
             });
           }
 

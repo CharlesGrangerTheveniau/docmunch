@@ -1,7 +1,10 @@
 import { writeFileSync, readFileSync, mkdirSync, existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import matter from "gray-matter";
 import { filePathForPage } from "../utils/slug";
+import { estimateTokens } from "../utils/tokens";
+import type { ManifestPage } from "./manifest";
 
 /** Strip the fetched_at line so two outputs can be compared ignoring timestamp. */
 function stripTimestamp(content: string): string {
@@ -89,7 +92,7 @@ export interface PageEntry {
 }
 
 export interface WritePagesResult {
-  entries: { title: string; path: string }[];
+  entries: ManifestPage[];
   written: number;
 }
 
@@ -105,7 +108,7 @@ export function writePages(
   options?: { force?: boolean }
 ): WritePagesResult {
   const usedPaths = new Set<string>();
-  const entries: { title: string; path: string }[] = [];
+  const entries: ManifestPage[] = [];
   let written = 0;
 
   for (const page of pages) {
@@ -129,7 +132,17 @@ export function writePages(
     });
     if (didWrite) written++;
 
-    entries.push({ title: page.title, path: relPath });
+    const tokenCount = estimateTokens(page.markdown);
+    const contentHash = createHash("sha256")
+      .update(page.markdown)
+      .digest("hex");
+
+    entries.push({
+      title: page.title,
+      path: relPath,
+      token_count: tokenCount,
+      content_hash: contentHash,
+    });
   }
 
   return { entries, written };

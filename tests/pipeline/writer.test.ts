@@ -148,9 +148,14 @@ describe("writePages", () => {
     const { entries, written } = writePages(pages, "/out/example", "/docs/");
 
     expect(entries).toEqual([
-      { title: "Intro", path: "intro.md" },
-      { title: "Auth Guide", path: "guides/auth.md" },
+      expect.objectContaining({ title: "Intro", path: "intro.md" }),
+      expect.objectContaining({ title: "Auth Guide", path: "guides/auth.md" }),
     ]);
+    // Verify token_count and content_hash are present
+    expect(entries[0].token_count).toBeGreaterThan(0);
+    expect(entries[0].content_hash).toMatch(/^[a-f0-9]{64}$/);
+    expect(entries[1].token_count).toBeGreaterThan(0);
+    expect(entries[1].content_hash).toMatch(/^[a-f0-9]{64}$/);
     expect(written).toBe(2);
     expect(writeFileSync).toHaveBeenCalledTimes(2);
   });

@@ -2,13 +2,22 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import type { SiteMeta } from "./meta-extractor";
 
+/** A single page entry in a source manifest. */
+export interface ManifestPage {
+  title: string;
+  path: string;
+  token_count?: number;
+  content_hash?: string;
+}
+
 /** Manifest for a single documentation source (written as _index.json). */
 export interface SourceManifest {
   name: string;
   url: string;
   platform: string;
   fetched_at: string;
-  pages: { title: string; path: string }[];
+  total_tokens?: number;
+  pages: ManifestPage[];
   display_name?: string;
   description?: string;
   icon_url?: string | null;
@@ -26,6 +35,7 @@ export interface RootManifestEntry {
   description?: string;
   icon_url?: string | null;
   page_count?: number;
+  total_tokens?: number;
 }
 
 /** Root manifest listing all sources (written as manifest.json). */
@@ -41,14 +51,17 @@ export function buildSourceManifest(
   name: string,
   url: string,
   platform: string,
-  pages: { title: string; path: string }[],
+  pages: ManifestPage[],
   siteMeta?: SiteMeta
 ): SourceManifest {
+  const totalTokens = pages.reduce((sum, p) => sum + (p.token_count || 0), 0);
+
   const manifest: SourceManifest = {
     name,
     url,
     platform,
     fetched_at: new Date().toISOString(),
+    ...(totalTokens > 0 && { total_tokens: totalTokens }),
     pages,
   };
 
