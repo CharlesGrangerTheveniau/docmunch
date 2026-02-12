@@ -1,13 +1,14 @@
 import MiniSearch from "minisearch";
 import type { LoadedPage } from "./loader";
 
-/** A search result with metadata (no content). */
+/** A search result with metadata and optional preview (no full content). */
 export interface SearchResult {
   source: string;
   path: string;
   title: string;
   url: string;
   score: number;
+  preview: string;
 }
 
 /** Options for searching the index. */
@@ -22,19 +23,33 @@ export interface SearchIndex {
 }
 
 /**
+ * Generate a short preview from page content.
+ * Strips the first heading, trims to ~maxLength chars at a word boundary.
+ */
+export function generatePreview(content: string, maxLength = 200): string {
+  const clean = content.replace(/^#.*\n/, "").trim();
+  if (clean.length <= maxLength) return clean;
+  const truncated = clean.slice(0, maxLength);
+  const lastSpace = truncated.lastIndexOf(" ");
+  return (lastSpace > 0 ? truncated.slice(0, lastSpace) : truncated) + "...";
+}
+
+/**
  * Build a full-text search index over all loaded pages.
  * Indexes title and content fields with prefix and fuzzy matching.
+ * Stores a preview per page for inclusion in search results.
  */
 export function buildSearchIndex(pages: LoadedPage[]): SearchIndex {
-  const miniSearch = new MiniSearch<LoadedPage>({
+  const miniSearch = new MiniSearch({
     fields: ["title", "content"],
-    storeFields: ["source", "path", "title", "url"],
+    storeFields: ["source", "path", "title", "url", "preview"],
     idField: "id",
   });
 
   const documents = pages.map((page, i) => ({
     id: String(i),
     ...page,
+    preview: generatePreview(page.content),
   }));
 
   miniSearch.addAll(documents);
@@ -61,6 +76,7 @@ export function buildSearchIndex(pages: LoadedPage[]): SearchIndex {
         title: r.title as string,
         url: r.url as string,
         score: r.score,
+        preview: (r.preview as string) || "",
       }));
     },
   };

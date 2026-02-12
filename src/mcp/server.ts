@@ -3,11 +3,28 @@ import { z } from "zod";
 import { loadDocs } from "./loader";
 import { buildSearchIndex } from "./search";
 
+/** Options for remote registry integration. */
+export interface RegistryOptions {
+  url: string;
+  token?: string;
+  team?: string;
+}
+
+/** Options for creating the MCP server. */
+export interface McpServerOptions {
+  registry?: RegistryOptions;
+}
+
 /**
  * Create an MCP server that exposes documentation tools.
- * Eagerly loads all docs and builds a search index at creation time.
+ * Eagerly loads all local docs and builds a search index at creation time.
+ * When registry options are provided, remote sources will be available
+ * alongside local ones (not yet implemented — plumbing only).
  */
-export function createMcpServer(docsDir: string): McpServer {
+export function createMcpServer(
+  docsDir: string,
+  options?: McpServerOptions
+): McpServer {
   const docs = loadDocs(docsDir);
   const searchIndex = buildSearchIndex(docs.pages);
 
@@ -113,6 +130,7 @@ export function createMcpServer(docsDir: string): McpServer {
                 path: r.path,
                 title: r.title,
                 score: r.score,
+                preview: r.preview,
               })),
               null,
               2

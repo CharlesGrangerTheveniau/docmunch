@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildSearchIndex } from "../../src/mcp/search";
+import { buildSearchIndex, generatePreview } from "../../src/mcp/search";
 import type { LoadedPage } from "../../src/mcp/loader";
 
 const testPages: LoadedPage[] = [
@@ -96,5 +96,38 @@ describe("buildSearchIndex", () => {
     expect(results.length).toBeGreaterThan(0);
     expect(typeof results[0].score).toBe("number");
     expect(results[0].score).toBeGreaterThan(0);
+  });
+
+  it("returns preview field in search results", () => {
+    const index = buildSearchIndex(testPages);
+    const results = index.search("Authentication");
+
+    expect(results.length).toBeGreaterThan(0);
+    expect(typeof results[0].preview).toBe("string");
+    expect(results[0].preview.length).toBeGreaterThan(0);
+  });
+});
+
+describe("generatePreview", () => {
+  it("strips first heading and trims", () => {
+    const content = "# Getting Started\nWelcome to the docs.";
+    const preview = generatePreview(content);
+    expect(preview).toBe("Welcome to the docs.");
+  });
+
+  it("truncates long content at word boundary", () => {
+    const content = "a".repeat(100) + " " + "b".repeat(150);
+    const preview = generatePreview(content, 50);
+    expect(preview.length).toBeLessThanOrEqual(54); // 50 + "..."
+    expect(preview.endsWith("...")).toBe(true);
+  });
+
+  it("returns full content when shorter than maxLength", () => {
+    const content = "Short content.";
+    expect(generatePreview(content)).toBe("Short content.");
+  });
+
+  it("handles empty content", () => {
+    expect(generatePreview("")).toBe("");
   });
 });
